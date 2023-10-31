@@ -1,0 +1,8 @@
+packages: ./plutus-integer-bytestring.cabal
+
+documentation: true
+
+test-show-details: direct
+
+package plutus-integer-bytestring
+  ghc-options: -Werror

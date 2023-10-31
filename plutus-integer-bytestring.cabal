@@ -1,0 +1,40 @@
+cabal-version:      3.0
+name:               plutus-integer-bytestring
+version:            1.0.0
+synopsis:           PoC for Plutus Integer to ByteString conversions
+description:        PoC for Plutus Integer to ByteString conversions
+homepage:           https://github.com/mlabs-haskell/plutus-integer-bytestring
+license:            Apache-2.0
+license-file:       LICENSE.md
+author:             Koz Ross
+maintainer:         koz@mlabs.city
+bug-reports:        https://github.com/mlabs-haskell/plutus-integer-bytestring
+copyright:          (C) MLabs 2023
+category:           Plutus
+tested-with:        GHC ==9.6.3
+build-type:         Simple
+extra-source-files:
+  CHANGELOG.md
+  README.md
+
+-- Common sections
+
+common lang
+  ghc-options:
+    -Wall -Wcompat -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wredundant-constraints
+    -Wmissing-export-lists -Wmissing-deriving-strategies
+    -Wredundant-bang-patterns
+
+  build-depends:    base ^>=4.18.1.0
+  default-language: Haskell2010
+
+library
+  import:          lang
+  exposed-modules: Naive
+  other-modules:   CTConstants
+  build-depends:
+    , bytestring
+    , ghc-bignum
+
+  hs-source-dirs:  src
