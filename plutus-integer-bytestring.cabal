@@ -32,9 +32,15 @@ common lang
 library
   import:          lang
   exposed-modules: Naive
-  other-modules:   CTConstants
+  other-modules:
+    BSUtils
+    CTConstants
+
   build-depends:
     , bytestring
     , ghc-bignum
 
+  include-dirs:    cbits
+  c-sources:       cbits/bsutils.c
+  cc-options:      -Wall -Wextra -Werror -O2
   hs-source-dirs:  src

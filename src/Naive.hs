@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
@@ -8,16 +9,18 @@
 
 module Naive (toByteString, fromByteString) where
 
+import BSUtils (stripEndZeroes, stripStartZeroes)
 import CTConstants (bytesPerWord)
 import Control.Applicative (pure, (*>))
 import Data.Bits (zeroBits)
-import Data.Bool (Bool, not, otherwise)
+import Data.Bool (Bool, otherwise)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BSI
 import Data.Eq ((==))
 import Data.Function (($))
-import Data.Ord (max)
+import Data.Ord (max, (<), (>=))
+import Foreign.Marshal.Utils (fillBytes)
 import Foreign.Storable (pokeByteOff)
 import GHC.ByteOrder
   ( ByteOrder (BigEndian, LittleEndian),
@@ -29,14 +32,19 @@ import GHC.Exts
     Int (I#),
     Int#,
     Ptr,
-    Word8#,
     clz#,
+    indexWord8Array#,
     int2Word#,
+    int8ToInt#,
     int8ToWord8#,
     intToInt8#,
     isTrue#,
     quotRemInt#,
+    sizeofByteArray#,
     word2Int#,
+    word8ToInt8#,
+    (+#),
+    (-#),
     (<#),
     (==#),
   )
@@ -58,17 +66,13 @@ toByteString requestedLen wantBigEndian = \case
   IP bn# ->
     if bigNatIsZero bn#
       then mkZero
-      else mkBig requestedLen flippingRequired bn#
+      else mkBig requestedLen requestedByteOrder bn#
   IN _ -> errNegative
   where
     errNegative :: ByteString
     errNegative = error "Cannot convert negative number"
     mkZero :: ByteString
     mkZero = BS.singleton 0
-    flippingRequired :: Bool
-    flippingRequired = case targetByteOrder of
-      BigEndian -> not wantBigEndian
-      LittleEndian -> wantBigEndian
     requestedByteOrder :: ByteOrder
     requestedByteOrder = if wantBigEndian then BigEndian else LittleEndian
 
@@ -76,11 +80,14 @@ fromByteString :: Bool -> ByteString -> Integer
 fromByteString isBigEndian bs =
   if BS.length bs == 0
     then error "Cannot convert empty ByteString"
-    else _
+    else
+      let _stripped =
+            if isBigEndian
+              then stripEndZeroes bs
+              else stripStartZeroes bs
+       in error "Not implemented yet!"
 
 -- Helpers
-
--- NOTE: Doesn't work because word-based padding aaaaa
 
 -- When we have only a single limb, the situation is considerably easier: we can
 -- deploy numeric operations to 'disassemble' the limb, thus not needing to
@@ -122,7 +129,7 @@ mkSmall requestedLen requiredByteOrder i# =
         LittleEndian -> 0
    in -- Step 4
       unsafeDupablePerformIO $ BSI.create requiredLength $ \ptr -> do
-        BSI.memset ptr zeroBits (fromIntegral requiredLength)
+        fillBytes ptr zeroBits (fromIntegral requiredLength)
         -- Step 5
         go ptr startingPosition i#
   where
@@ -150,5 +157,121 @@ mkSmall requestedLen requiredByteOrder i# =
       BigEndian -> subtract 1
       LittleEndian -> (+ 1)
 
-mkBig :: Int -> Bool -> ByteArray# -> ByteString
-mkBig requestedLen flippingRequired ba# = _
+-- When we have multiple limbs, there's some added difficulties. The underlying
+-- implementation of Integer happens to be a ByteArray#, storing words:
+-- effectively, we have a base 2^k representation, where k is the bit size of
+-- the native machine word.
+--
+-- Here, we have to be careful, since there are technically _two_ ordering
+-- issues at play:
+--
+-- - Endianness of the words themselves, which comes from the platform; and
+-- - The order of the words-as-digits: either in ascending or descending place
+--   value.
+--
+-- According to the documentation
+-- (https://hackage.haskell.org/package/ghc-bignum-1.3/docs/GHC-Num-BigNat.html#t:BigNat-35-),
+-- the order of words-as-digits is in ascending order of place value
+-- (confusingly labelled 'little-endian' in the description). Thus, if we assume
+-- a number comprising of n limbs (l_1, l_2, ..., l_n), each consisting of k
+-- bytes (b_1, b_2, ..., b_k), with b_1 being the least significant byte, we
+-- have two possible byte layouts. On a little-endian system, this would be:
+--
+-- (l_1, b_1), (l_1, b_2), ... , (l_1, b_k), (l_2, b_1), ... , (l_n, b_k)
+--
+-- On a big-endian system, this would be:
+--
+-- (l_1, b_k), (l_1, b_{k-1}), ... , (l_1, b_1), (l_2, b_k), (l_2, b_{k-1}), ...
+-- , (l_n, b_1)
+--
+-- As 'limbing' is an implementation detail (and is platform-dependent anyway),
+-- we choose a different translation. If the requested endianness is
+-- little-endian, we lay out the resulting ByteString as follows:
+--
+-- (l_1, b_1), (l_1, b_2), ... , (l_1, b_k), (l_2, b_1), ... , (l_n, b_k)
+--
+-- This matches the layout on a little-endian system exactly. If the requested
+-- endianness is big-endian, we instead lay out the resulting ByteString as
+-- follows:
+--
+-- (l_n, b_k), (l_n, b_{k-1}), ... , (l_n, b_1), (l_{n-1}, b_k), (l_{n-1},
+-- b_{k-1}), ..., (l_1, b_1)
+--
+-- This is the exact reverse of the little-endian layout described above. This
+-- has two advantages: it is independent of any 'limbing' choices, and is easy
+-- to grasp. Effectively, we choose to have a representation in base-256, with
+-- either ascending or descending place value.
+--
+-- For efficiency, we allow users to request representation lengths that are not
+-- exact multiples of the word size, assuming this would not change the number
+-- being represented. In such a case, either trailing (in the little-endian
+-- case) or leading (in the big-endian case) zeroes can be dropped.
+--
+-- = Algorithm
+--
+-- 1. Determine if there are any non-significant zero bytes in the input
+--    ByteArray#. Zero bytes are non-significant if they are in the
+--    highest-index limb, and have higher byte positions in that limb than any
+--    non-zero byte. Subtract this from the length of the input ByteArray# to
+--    determine a minimum representation length.
+-- 2. Compare the result from 1 to the requested length; take the maximum.
+-- 3. Copy over the bytes in the requested order.
+mkBig :: Int -> ByteOrder -> ByteArray# -> ByteString
+mkBig requestedLen requestedByteOrder ba# =
+  let -- Step 1
+      minimalLen = I# (sizeofByteArray# ba# -# unnecessaryZeroes)
+      -- Step 2
+      requiredLength = max minimalLen requestedLen
+   in unsafeDupablePerformIO $ BSI.create requiredLength $ \ptr -> do
+        -- Step 3
+        case (requestedByteOrder, targetByteOrder) of
+          (LittleEndian, LittleEndian) -> copyBAToPtr ba# ptr requiredLength
+          (BigEndian, LittleEndian) -> copyBAToPtrReverse ba# ptr requiredLength
+          (LittleEndian, BigEndian) -> error "Not implemented yet!"
+          (BigEndian, BigEndian) -> error "Not implemented yet!"
+  where
+    unnecessaryZeroes :: Int#
+    unnecessaryZeroes = case targetByteOrder of
+      LittleEndian -> countUnnecessaryZeroesLE ba#
+      BigEndian -> countUnnecessaryZeroesBE ba#
+
+-- As the layout is as follows:
+--
+-- (l_1, b_1), (l_1, b_2), ... , (l_1, b_k), (l_2, b_1), ... , (l_n, b_k)
+--
+-- we only need to count zero bytes from the end until we reach any non-zero.
+-- Due to the call source, we know that the input is non-empty.
+countUnnecessaryZeroesLE :: ByteArray# -> Int#
+countUnnecessaryZeroesLE ba# = go 0# (sizeofByteArray# ba# -# 1#)
+  where
+    go :: Int# -> Int# -> Int#
+    go acc# ix#
+      | isTrue# (ix# <# 0#) = acc#
+      | otherwise =
+          let !read# = int8ToInt# (word8ToInt8# (indexWord8Array# ba# ix#))
+           in if isTrue# (read# ==# 0#)
+                then go (acc# +# 1#) (ix# -# 1#)
+                else acc#
+
+copyBAToPtr :: ByteArray# -> Ptr Word8 -> Int -> IO ()
+copyBAToPtr ba# ptr limit = go 0
+  where
+    go :: Int -> IO ()
+    go ix@(I# ix#)
+      | ix >= limit = pure ()
+      | otherwise =
+          let fromBA = W8# (indexWord8Array# ba# ix#)
+           in pokeByteOff ptr ix fromBA *> go (ix + 1)
+
+copyBAToPtrReverse :: ByteArray# -> Ptr Word8 -> Int -> IO ()
+copyBAToPtrReverse ba# ptr limit = go (limit - 1)
+  where
+    go :: Int -> IO ()
+    go ix@(I# ix#)
+      | ix < 0 = pure ()
+      | otherwise =
+          let fromBA = W8# (indexWord8Array# ba# ix#)
+           in pokeByteOff ptr (limit - ix - 1) fromBA *> go (ix - 1)
+
+countUnnecessaryZeroesBE :: ByteArray# -> Int#
+countUnnecessaryZeroesBE _ = error "Not implemented yet!"
