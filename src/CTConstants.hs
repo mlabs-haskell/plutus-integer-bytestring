@@ -4,8 +4,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module CTConstants (bytesPerWord) where
+module CTConstants (bytesPerWord, checkNativeEndianness) where
 
+import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian), targetByteOrder)
+import GHC.Err (error)
 import GHC.Exts (Int (I#))
 import GHC.Num.WordArray (wordsToBytes#)
 
@@ -15,3 +17,20 @@ import GHC.Num.WordArray (wordsToBytes#)
 -- this constant for padding purposes.
 bytesPerWord :: Int
 bytesPerWord = $$([||I# (wordsToBytes# 1#)||])
+
+-- We only support Tier 1 platforms
+-- (https://gitlab.haskell.org/ghc/ghc/-/wikis/platforms#tier-1-platforms), and
+-- to ensure this, we verify, at compile time, that we have a little-endian
+-- native byte order, erroring out of compilation if we don't. This allows the
+-- rest of our code to safely assume we're not on a big-endian system.
+--
+-- We have to export this to stop GHC complaining, but it's not useful, hence
+-- the type.
+checkNativeEndianness :: ()
+checkNativeEndianness =
+  $$( [||
+      case targetByteOrder of
+        BigEndian -> error "Big-endian architectures are not supported."
+        LittleEndian -> ()
+      ||]
+    )
