@@ -29,13 +29,15 @@ common lang
   build-depends:    base ^>=4.18.1.0
   default-language: Haskell2010
 
+-- Library
+
 library
   import:          lang
-  exposed-modules: Naive
-  other-modules:
+  exposed-modules:
     BSUtils
-    CTConstants
+    Naive
 
+  other-modules:   CTConstants
   build-depends:
     , bytestring
     , ghc-bignum
@@ -44,3 +46,21 @@ library
   c-sources:       cbits/bsutils.c
   cc-options:      -Wall -Wextra -Werror -O2
   hs-source-dirs:  src
+
+-- Tests
+
+test-suite bytestring-helpers
+  import:         lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  other-modules:  NEByteString
+  build-depends:
+    , bytestring
+    , plutus-integer-bytestring
+    , QuickCheck
+    , quickcheck-instances
+    , tasty
+    , tasty-hunit
+    , tasty-quickcheck
+
+  hs-source-dirs: test/bytestring-helpers

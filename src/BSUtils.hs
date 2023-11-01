@@ -2,7 +2,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module BSUtils (stripStartZeroes, stripEndZeroes) where
+module BSUtils
+  ( -- * Functions
+    stripStartZeroes,
+    stripEndZeroes,
+
+    -- * FFI wrappers
+    cFindFirstNonZero,
+    cFindLastNonZero,
+  )
+where
 
 import Control.Applicative (pure)
 import Data.Bool (otherwise)
@@ -48,8 +57,9 @@ stripStartZeroes bs
 --
 -- = Laws
 --
--- 1. @'stripEndZeroes' 'Data.ByteString.empty'@ @=@ @'Data.ByteString.empty'@
--- 2. @'stripEndZeroes'
+-- 1. @'stripEndZeroes' 'empty'@ @=@ @'empty'@
+-- 2. @'stripEndZeroes' ('Data.ByteString.snoc' bs w8)@ @=@ @if w8 '==' 0 then
+--    'stripEndZeroes' bs else 'Data.ByteString.snoc' bs w8@
 stripEndZeroes :: ByteString -> ByteString
 stripEndZeroes bs
   | null bs = bs
@@ -64,12 +74,39 @@ stripEndZeroes bs
 
 -- Helpers
 
+-- | Finds the first index of a non-zero byte given the argument pointer as a
+-- start, to a limit of the second argument. Returns the second argument if no
+-- such index exists.
+--
+-- = Important note
+--
+-- The second argument must truly define the maximum extend of the array being
+-- considered, and that array must be non-empty: thus, a zero second argument
+-- will give undefined behaviour.
+--
+-- = Laws
+--
+-- 1. @'cFindFirstNonZero' ptr n@ @'Data.Ord.<='@ @n@
+-- 2.
 foreign import capi "bsutils.h find_first_nonzero"
   cFindFirstNonZero ::
     Ptr CUChar ->
     CSize ->
     CSize
 
+-- | Finds the last index of a non-zero byte given the argument pointer as a
+-- start, to a limit of the second argument. Returns the second argument if no
+-- such index exists.
+--
+-- = Important note
+--
+-- The second argument must truly define the maximum extend of the array being
+-- considered, and that array must be non-empty: thus, a zero second argument
+-- will give undefined behaviour.
+--
+-- = Laws
+--
+-- 1. @'cFindLastNonZero' ptr n@ @'Data.Ord.<='@ @n@
 foreign import capi "bsutils.h find_last_nonzero"
   cFindLastNonZero ::
     Ptr CUChar ->
