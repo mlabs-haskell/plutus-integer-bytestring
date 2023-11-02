@@ -3,275 +3,267 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Naive (toByteString, fromByteString) where
+module Naive (toByteString) where
 
-import BSUtils (stripEndZeroes, stripStartZeroes)
+import BSUtils (copyBytes, copyBytesReversed)
 import CTConstants (bytesPerWord)
 import Control.Applicative (pure, (*>))
-import Data.Bits (zeroBits)
-import Data.Bool (Bool, otherwise)
+import Data.Bool (otherwise)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BSI
 import Data.Eq ((==))
 import Data.Function (($))
-import Data.Ord (max, (<), (>=))
+import Data.Ord (max)
 import Foreign.Marshal.Utils (fillBytes)
 import Foreign.Storable (pokeByteOff)
-import GHC.ByteOrder
-  ( ByteOrder (BigEndian, LittleEndian),
-    targetByteOrder,
-  )
+import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Err (error)
 import GHC.Exts
   ( ByteArray#,
     Int (I#),
     Int#,
     Ptr,
+    Word#,
     clz#,
-    indexWord8Array#,
     int2Word#,
-    int8ToInt#,
-    int8ToWord8#,
-    intToInt8#,
     isTrue#,
     quotRemInt#,
+    quotRemWord#,
     sizeofByteArray#,
     word2Int#,
-    word8ToInt8#,
-    (+#),
-    (-#),
+    wordToWord8#,
     (<#),
     (==#),
   )
 import GHC.Num (subtract, (+), (-))
-import GHC.Num.BigNat (bigNatIsZero)
+import GHC.Num.BigNat (bigNatSize, bigNatToWord#)
 import GHC.Num.Integer (Integer (IN, IP, IS))
-import GHC.Real (fromIntegral, quot)
+import GHC.Num.WordArray (wordArrayLast#)
+import GHC.Real (quot)
 import GHC.Word (Word8 (W8#))
 import System.IO (IO)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
-toByteString :: Int -> Bool -> Integer -> ByteString
-toByteString requestedLen wantBigEndian = \case
+-- | Given a desired byte length and a desired byte order (see below), as
+-- well as a non-negative integer, constructs its byte-based representation.
+--
+-- = Representation
+--
+-- We represent a non-negative integer \(i\) in a base-256 representation; the
+-- minimum byte length for such a representation is the number of base-256
+-- digits that would be required to represent \(i\), which is
+--
+-- \[
+-- \max(1, \ceil(\log_{256}(i)))
+-- \]
+--
+-- If the desired
+-- byte length is larger than this, the number will be padded (see below); if
+-- the desired byte length is smaller, the minimum byte length will be used
+-- instead.
+--
+-- If a little-endian byte order is requested, the bytes are laid out in
+-- ascending order of place value: the first byte is the least-significant
+-- digit. Correspondingly, if a big-endian byte order is requested, the
+-- bytes are laid out in descending order of place value: the first byte is the
+-- most-significant digit. Padding bytes (which are zero bytes) will be put at
+-- the end of the `ByteString` if little-endian byte order is requested, and
+-- at the beginning of the `ByteString` if big-endian byte order is
+-- requested.
+--
+-- For example, consider the number \(123,456\). If we call 'toByteString'
+-- requesting a length of 0 (meaning the minimum will be used) and a
+-- little-endian byte order, the result will be @[ 0x80, 0xC2, 0x01 ]@; if instead
+-- we requested a big-endian byte order, it would be @[ 0x01, 0xC2, 0x80 ]@. If
+-- instead we requested a length of 4, the corresponding little-endian result
+-- would be @[ 0x80, 0xC2, 0x01, 0x00 ]@, while the corresponding big-endian
+-- result would be @[ 0x00, 0x01, 0xC2, 0x80 ]@.
+--
+-- = Important note
+--
+-- Negative `Integer`s cannot be converted and will fail.
+toByteString :: Int -> ByteOrder -> Integer -> ByteString
+toByteString requestedLength requestedByteOrder = \case
   IS i# ->
     if
-        | isTrue# (i# <# 0#) -> errNegative
-        | isTrue# (i# ==# 0#) -> mkZero
-        | otherwise -> mkSmall requestedLen requestedByteOrder i#
+        | isTrue# (i# <# 0#) -> error "toByteString: cannot convert a negative Integer"
+        | isTrue# (i# ==# 0#) -> BS.singleton 0
+        | otherwise -> convertSmall requestedLength requestedByteOrder i#
   IP bn# ->
-    if bigNatIsZero bn#
-      then mkZero
-      else mkBig requestedLen requestedByteOrder bn#
-  IN _ -> errNegative
-  where
-    errNegative :: ByteString
-    errNegative = error "Cannot convert negative number"
-    mkZero :: ByteString
-    mkZero = BS.singleton 0
-    requestedByteOrder :: ByteOrder
-    requestedByteOrder = if wantBigEndian then BigEndian else LittleEndian
-
-fromByteString :: Bool -> ByteString -> Integer
-fromByteString isBigEndian bs =
-  if BS.length bs == 0
-    then error "Cannot convert empty ByteString"
-    else
-      let _stripped =
-            if isBigEndian
-              then stripEndZeroes bs
-              else stripStartZeroes bs
-       in error "Not implemented yet!"
+    if bigNatSize bn# == 1
+      then convertOneLimb requestedLength requestedByteOrder (bigNatToWord# bn#)
+      else convertLarge requestedLength requestedByteOrder bn#
+  IN _ -> error "toByteString: cannot convert a negative Integer"
 
 -- Helpers
 
--- When we have only a single limb, the situation is considerably easier: we can
--- deploy numeric operations to 'disassemble' the limb, thus not needing to
--- concern ourselves with the native byte order at all: only the one that was
--- requested. However, as users are allowed to specify any amount of padding
--- they like, we also have to take this into consideration.
+-- Handle the case where we're dealing with the optimized representaton
+-- (meaning, the Integer to be converted is representable in less than the
+-- number of bits in a machine word).
+--
+-- = Preconditions
+--
+-- 1. @i# > 0@
 --
 -- = Algorithm
 --
--- The following assumes that our input is not negative or zero: those cases
--- have been caught previously.
---
--- 1. Calculate the number of leading zeroes in the input i#, then divide it by
---    8 (dropping any remainder) to determine 'unnecessary' bytes for the
---    representation.
--- 2. Compare the requested length to the minimum length required, based on the
---    results of step 1 and how many bytes are used per limb. Take the larger
---    option.
--- 3. Determine where we have to start writing from, and how to step:
---      - If we got asked for big-endian, this will be at the _end_ of the
---      ByteString, and we will be stepping _backwards_.
---      - If we got asked for little-endian, this will be at the _beginning_ of
---      the ByteString, and we will be stepping forwards.
--- 4. Construct a new ByteString of the required length as determined in step 2,
---    and fill it with zeroes to ensure it's properly initialized everywhere.
--- 5. Disassemble i# using the recursive helper, writing the results into the
---    ByteString as we go.
-mkSmall :: Int -> ByteOrder -> Int# -> ByteString
-mkSmall requestedLen requiredByteOrder i# =
+-- 1. Determine the minimal length required to represent i#, then compare with
+--    requestedLength, taking the maximum.
+-- 2. Make a new ByteString of the length determined in step 1, and fill it
+--    with zero bytes.
+-- 3. Write each base-256 digit of i# into the new ByteString from step 2. If
+--    requestedByteOrder is little-endian, write digits in ascending place
+--    value; if requestedByteOrder is big-endian, write digits in descending
+--    place value.
+convertSmall :: Int -> ByteOrder -> Int# -> ByteString
+convertSmall requestedLength requestedByteOrder i# =
   let -- Step 1
-      leadingZeroBits :: Int = I# (word2Int# (clz# (int2Word# i#)))
-      leadingZeroBytes = leadingZeroBits `quot` 8
-      -- Step 2
-      bytesNeeded = bytesPerWord - leadingZeroBytes
-      requiredLength = max requestedLen bytesNeeded
-      -- Step 3 (plus 'move' helper)
-      startingPosition = case requiredByteOrder of
-        BigEndian -> requiredLength - 1
-        LittleEndian -> 0
-   in -- Step 4
-      unsafeDupablePerformIO $ BSI.create requiredLength $ \ptr -> do
-        fillBytes ptr zeroBits (fromIntegral requiredLength)
-        -- Step 5
-        go ptr startingPosition i#
+      --
+      -- We make use of the representation of Int# here by noting that, we can
+      -- establish the minimal number of bytes required to represent i# by
+      -- counting leading zeroes (as these are technically padding to ensure a
+      -- fixed width), dividing by 8, then subtracting this number from the
+      -- number of bytes needed to represent an Int#. This can be done optimally
+      -- by noting that clz# is a machine primitive (single assembly instruction
+      -- on all Tier 1 architectures) and that floor division by 8 is a shift by
+      -- 3.
+      minimalLength = bytesPerWord - (I# (word2Int# (clz# (int2Word# i#))) `quot` 8)
+      finalLength = max minimalLength requestedLength
+      (start, stop, move) = case requestedByteOrder of
+        BigEndian -> (finalLength - 1, finalLength - 1 - minimalLength, subtract 1)
+        LittleEndian -> (0, minimalLength, (+ 1))
+   in -- Step 2
+      --
+      -- We make use of unsafeDupablePerformIO here; this is completely safe, as
+      -- we only do it to allow mutable construction of a ByteString. Doing so
+      -- immutably (by using concatenations, a builder or converting a list)
+      -- would be intolerably slow and memory-consuming, especially when padding
+      -- bytes are taken into account. This is a common pattern in ByteString
+      -- internals.
+      unsafeDupablePerformIO $ BSI.create finalLength $ \ptr -> do
+        fillBytes ptr 0 finalLength
+        go ptr start stop move i#
   where
-    -- = Algorithm
+    -- Step 3
     --
-    -- 1. If the accumulator has reached 0, stop.
-    -- 2. Otherwise, divmod by 256 to extract the next significant byte.
-    -- 3. Write the quotient from 2 to the position given by our index in the
-    --    ByteString pointer
-    -- 4. Use the step helper determined previously to adjust the write
-    --    position, then recurse using the remainder from step 2 as the new
-    --    accumulator.
-    go :: Ptr Word8 -> Int -> Int# -> IO ()
-    go ptr i acc#
-      -- Step 1
-      | isTrue# (acc# ==# 0#) = pure ()
-      -- Step 2
-      | otherwise = case quotRemInt# acc# 256# of
-          (# q#, r# #) ->
-            let toWrite :: Word8 = W8# (int8ToWord8# (intToInt8# q#))
-             in -- Steps 3 and 4
-                pokeByteOff ptr i toWrite *> go ptr (move i) r#
-    move :: Int -> Int
-    move = case requiredByteOrder of
-      BigEndian -> subtract 1
-      LittleEndian -> (+ 1)
+    -- We again make use of the representation of Int#: by use of quotRem# with
+    -- a divisor of 256, we extract the least significant base-256 digit, as
+    -- well as whatever digits remain. Since this operation is efficient (shift
+    -- and mask only), we don't take the penalty for division: by repeating this
+    -- enough times, we can extract every significant digit, in ascending order
+    -- of place value.
+    --
+    -- To ensure we do a minimal amount of non-bulk (meaning, 'one byte at a
+    -- time') copying, we use the minimal length calculated above as a limit to
+    -- how many such writes we perform. As we know that this effectively gives
+    -- us the number of significant digits, we don't lose any information, but
+    -- potentially save a lot of work, especially if a lot of padding is
+    -- required.
+    --
+    -- We can adjust for big versus little-endianness by changing the starting
+    -- point of the write, as well as whether the index argument ascends or
+    -- descends. This has the downside of requiring a backwards write in the
+    -- case of big-endian byte order, which is cache-unfriendly, but given the
+    -- low number of required writes (at most bytesPerWord - 1), this is an
+    -- acceptable cost, especially since doing this using a forward write is
+    -- much more complex, likely dwarfing any benefit.
+    go :: Ptr Word8 -> Int -> Int -> (Int -> Int) -> Int# -> IO ()
+    go ptr ix limit move acc#
+      | ix == limit = pure ()
+      | otherwise =
+          let !(# q#, r# #) = quotRemInt# acc# 256#
+              byteToWrite = W8# (wordToWord8# (int2Word# r#))
+           in pokeByteOff ptr ix byteToWrite *> go ptr (move ix) limit move q#
 
--- When we have multiple limbs, there's some added difficulties. The underlying
--- implementation of Integer happens to be a ByteArray#, storing words:
--- effectively, we have a base 2^k representation, where k is the bit size of
--- the native machine word.
+-- This uses the same approach as convertSmall, but with the added benefit of
+-- knowing for a fact that we need at least a whole machine word's worth of
+-- bytes. This is because if we needed (potentially) fewer, the Integer would
+-- use the optimized representation as an Int#, and if we needed more, we'd have
+-- at least one more limb. Thus, instead of having to calculate how many bytes
+-- we need minimally, we just assume we need all of them. This also simplifies
+-- the write loop, as it can now run for a fixed number of cycles.
+convertOneLimb :: Int -> ByteOrder -> Word# -> ByteString
+convertOneLimb requestedLength requestedByteOrder w# =
+  let finalLength = max bytesPerWord requestedLength
+      indexes = case requestedByteOrder of
+        BigEndian -> [bytesPerWord - 1, bytesPerWord - 2 .. 0]
+        LittleEndian -> [0, 1 .. bytesPerWord - 1]
+   in unsafeDupablePerformIO $ BSI.create finalLength $ \ptr -> do
+        fillBytes ptr 0 finalLength
+        go ptr w# indexes
+  where
+    go :: Ptr Word8 -> Word# -> [Int] -> IO ()
+    go ptr acc# = \case
+      [] -> pure ()
+      (ix : ixes) ->
+        let !(# q#, r# #) = quotRemWord# acc# 256##
+            byteToWrite = W8# (wordToWord8# r#)
+         in pokeByteOff ptr ix byteToWrite *> go ptr q# ixes
+
+-- Handle the 'large' case, where we know we have at least two limbs in the
+-- representation.
 --
--- Here, we have to be careful, since there are technically _two_ ordering
--- issues at play:
+-- = Preconditions
 --
--- - Endianness of the words themselves, which comes from the platform; and
--- - The order of the words-as-digits: either in ascending or descending place
---   value.
---
--- According to the documentation
--- (https://hackage.haskell.org/package/ghc-bignum-1.3/docs/GHC-Num-BigNat.html#t:BigNat-35-),
--- the order of words-as-digits is in ascending order of place value
--- (confusingly labelled 'little-endian' in the description). Thus, if we assume
--- a number comprising of n limbs (l_1, l_2, ..., l_n), each consisting of k
--- bytes (b_1, b_2, ..., b_k), with b_1 being the least significant byte, we
--- have two possible byte layouts. On a little-endian system, this would be:
---
--- (l_1, b_1), (l_1, b_2), ... , (l_1, b_k), (l_2, b_1), ... , (l_n, b_k)
---
--- On a big-endian system, this would be:
---
--- (l_1, b_k), (l_1, b_{k-1}), ... , (l_1, b_1), (l_2, b_k), (l_2, b_{k-1}), ...
--- , (l_n, b_1)
---
--- As 'limbing' is an implementation detail (and is platform-dependent anyway),
--- we choose a different translation. If the requested endianness is
--- little-endian, we lay out the resulting ByteString as follows:
---
--- (l_1, b_1), (l_1, b_2), ... , (l_1, b_k), (l_2, b_1), ... , (l_n, b_k)
---
--- This matches the layout on a little-endian system exactly. If the requested
--- endianness is big-endian, we instead lay out the resulting ByteString as
--- follows:
---
--- (l_n, b_k), (l_n, b_{k-1}), ... , (l_n, b_1), (l_{n-1}, b_k), (l_{n-1},
--- b_{k-1}), ..., (l_1, b_1)
---
--- This is the exact reverse of the little-endian layout described above. This
--- has two advantages: it is independent of any 'limbing' choices, and is easy
--- to grasp. Effectively, we choose to have a representation in base-256, with
--- either ascending or descending place value.
---
--- For efficiency, we allow users to request representation lengths that are not
--- exact multiples of the word size, assuming this would not change the number
--- being represented. In such a case, either trailing (in the little-endian
--- case) or leading (in the big-endian case) zeroes can be dropped.
+-- 1. @bn#@ has at least two elements
 --
 -- = Algorithm
 --
--- 1. Determine if there are any non-significant zero bytes in the input
---    ByteArray#. Zero bytes are non-significant if they are in the
---    highest-index limb, and have higher byte positions in that limb than any
---    non-zero byte. Subtract this from the length of the input ByteArray# to
---    determine a minimum representation length.
--- 2. Compare the result from 1 to the requested length; take the maximum.
--- 3. Copy over the bytes in the requested order.
-mkBig :: Int -> ByteOrder -> ByteArray# -> ByteString
-mkBig requestedLen requestedByteOrder ba# =
+-- 1. Determine the minimal length required to represent ba#, then compare with
+--    requestedLength, taking the maximum.
+-- 2. Make a new ByteString of the length determined in step 1, and fill it with
+--    zero bytes.
+-- 3. Copy the data from ba# into the ByteString constructed in step 2; if
+--    requestedByteOrder is little-endian, the bytes are copied in the same
+--    order, whereas if requestedByteOrder is big-endian, the bytes are copied
+--    in reverse order.
+convertLarge :: Int -> ByteOrder -> ByteArray# -> ByteString
+convertLarge requestedLength requestedByteOrder ba# =
   let -- Step 1
-      minimalLen = I# (sizeofByteArray# ba# -# unnecessaryZeroes)
-      -- Step 2
-      requiredLength = max minimalLen requestedLen
-   in unsafeDupablePerformIO $ BSI.create requiredLength $ \ptr -> do
+      --
+      -- As the representation of BigNat# (which underlies this case of Integer)
+      -- is 'limbed', it must have a length that is an exact multiple of the
+      -- machine word size. Furthermore, BigNat#'s documentation
+      -- (https://hackage.haskell.org/package/ghc-bignum-1.3/docs/GHC-Num-BigNat.html#t:BigNat-35-)
+      -- specifies that the limbs are stored in ascending order of place value
+      -- (confusingly described as 'little-endian'), which means that any
+      -- padding zero bytes to 'fill out' the representation will be in the last
+      -- limb.
+      --
+      -- We use a similar technique to Step 1 of convertSmall (as it is
+      -- basically the same case, modulo type differences), but instead of
+      -- subtracting the calculated padding byte count from the size of a
+      -- machine word, we subtract it from the overall _byte_ length of ba#. It
+      -- is efficient for similar reasons to Step 1 of convertSmall.
+      !lastLimb# = wordArrayLast# ba#
+      extraTrailingBytes = I# (word2Int# (clz# lastLimb#)) `quot` 8
+      baLength = I# (sizeofByteArray# ba#)
+      minimalLength = baLength - extraTrailingBytes
+      finalLength = max minimalLength requestedLength
+   in -- Step 2
+      --
+      -- The same reasoning for unsafeDupablePerformIO as for Step 2 of
+      -- convertSmall applies here.
+      unsafeDupablePerformIO $ BSI.create finalLength $ \ptr -> do
+        fillBytes ptr 0 finalLength
         -- Step 3
-        case (requestedByteOrder, targetByteOrder) of
-          (LittleEndian, LittleEndian) -> copyBAToPtr ba# ptr requiredLength
-          (BigEndian, LittleEndian) -> copyBAToPtrReverse ba# ptr requiredLength
-          (LittleEndian, BigEndian) -> error "Not implemented yet!"
-          (BigEndian, BigEndian) -> error "Not implemented yet!"
-  where
-    unnecessaryZeroes :: Int#
-    unnecessaryZeroes = case targetByteOrder of
-      LittleEndian -> countUnnecessaryZeroesLE ba#
-      BigEndian -> countUnnecessaryZeroesBE ba#
-
--- As the layout is as follows:
---
--- (l_1, b_1), (l_1, b_2), ... , (l_1, b_k), (l_2, b_1), ... , (l_n, b_k)
---
--- we only need to count zero bytes from the end until we reach any non-zero.
--- Due to the call source, we know that the input is non-empty.
-countUnnecessaryZeroesLE :: ByteArray# -> Int#
-countUnnecessaryZeroesLE ba# = go 0# (sizeofByteArray# ba# -# 1#)
-  where
-    go :: Int# -> Int# -> Int#
-    go acc# ix#
-      | isTrue# (ix# <# 0#) = acc#
-      | otherwise =
-          let !read# = int8ToInt# (word8ToInt8# (indexWord8Array# ba# ix#))
-           in if isTrue# (read# ==# 0#)
-                then go (acc# +# 1#) (ix# -# 1#)
-                else acc#
-
-copyBAToPtr :: ByteArray# -> Ptr Word8 -> Int -> IO ()
-copyBAToPtr ba# ptr limit = go 0
-  where
-    go :: Int -> IO ()
-    go ix@(I# ix#)
-      | ix >= limit = pure ()
-      | otherwise =
-          let fromBA = W8# (indexWord8Array# ba# ix#)
-           in pokeByteOff ptr ix fromBA *> go (ix + 1)
-
-copyBAToPtrReverse :: ByteArray# -> Ptr Word8 -> Int -> IO ()
-copyBAToPtrReverse ba# ptr limit = go (limit - 1)
-  where
-    go :: Int -> IO ()
-    go ix@(I# ix#)
-      | ix < 0 = pure ()
-      | otherwise =
-          let fromBA = W8# (indexWord8Array# ba# ix#)
-           in pokeByteOff ptr (limit - ix - 1) fromBA *> go (ix - 1)
-
-countUnnecessaryZeroesBE :: ByteArray# -> Int#
-countUnnecessaryZeroesBE _ = error "Not implemented yet!"
+        --
+        -- We can do a direct copy in the little-endian case, as we assume we're
+        -- on a little-endian machine architecture (and in fact, refuse to
+        -- compile if we aren't). In the big-endian case, as long as we start
+        -- reading from a significant byte (that is, skipping any padding), we
+        -- can produce our desired representation by just copying everything
+        -- backwards, as this is exactly the reverse of the representation used
+        -- by BigNat# on little-endian architectures.
+        --
+        -- Because we have mis-matched arguments (ByteArray# as a source, Ptr
+        -- Word8 as a destination), and that reverse copying isn't implemented
+        -- anyway, we have to resort to the FFI: see the definitions of
+        -- copyBytes and copyBytesReversed for a description of why they work.
+        case requestedByteOrder of
+          BigEndian -> copyBytesReversed ptr ba# minimalLength baLength
+          LittleEndian -> copyBytes ptr ba# minimalLength

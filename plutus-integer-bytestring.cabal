@@ -33,34 +33,19 @@ common lang
 
 library
   import:          lang
-  exposed-modules:
-    BSUtils
-    Naive
-
+  exposed-modules: Naive
   other-modules:   CTConstants
   build-depends:
+    , bsutils
     , bytestring
     , ghc-bignum
 
+  hs-source-dirs:  src
+
+library bsutils
+  import:          lang
+  exposed-modules: BSUtils
   include-dirs:    cbits
   c-sources:       cbits/bsutils.c
   cc-options:      -Wall -Wextra -Werror -O2
-  hs-source-dirs:  src
-
--- Tests
-
-test-suite bytestring-helpers
-  import:         lang
-  type:           exitcode-stdio-1.0
-  main-is:        Main.hs
-  other-modules:  NEByteString
-  build-depends:
-    , bytestring
-    , plutus-integer-bytestring
-    , QuickCheck
-    , quickcheck-instances
-    , tasty
-    , tasty-hunit
-    , tasty-quickcheck
-
-  hs-source-dirs: test/bytestring-helpers
+  hs-source-dirs:  bsutils

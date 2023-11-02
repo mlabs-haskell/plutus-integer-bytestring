@@ -1,9 +1,8 @@
 #ifndef BSUTILS_H
 #define BSUTILS_H
-#include <stdlib.h>
+#include <stddef.h>
 
-size_t find_first_nonzero(unsigned char const *ptr, size_t len);
-
-size_t find_last_nonzero(unsigned char const *ptr, size_t len);
+void *memcpy_r(void *restrict dest, void const *restrict src, size_t n,
+               size_t src_len);
 
 #endif // BSUTILS_H

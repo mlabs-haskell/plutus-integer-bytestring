@@ -1,86 +1,39 @@
 #include "bsutils.h"
-#include <stdbool.h>
+#include <stdint.h>
 
-size_t find_first_nonzero(unsigned char const *ptr, size_t len) {
-  size_t big_steps = len / sizeof(unsigned long long);
-  size_t small_steps = len % sizeof(unsigned long long);
-  size_t result = 0;
+void *memcpy_r(void *restrict dest, void const *restrict src, size_t n,
+               size_t src_len) {
+  // We use the 'strip mining' technique to speed up the reverse copy
+  // (http://physics.ujep.cz/~zmoravec/prga/main_for/mergedProjects/optaps_for/common/optaps_vec_mine.htm).
+  // Essentially, we first copy (and reverse) 64-bit blocks, then after we've
+  // done as many as we can, finish up whatever remains byte-by-byte. This is
+  // much more efficient than going byte-wise through the entire process, as it
+  // reduces memory movement by a factor of 8.
+  //
+  // We choose a 64-bit block size for our large copy-and-reverse step because
+  // both GCC and Clang (the only compilers we are concerned with given our
+  // focus on Tier 1 architectures) provide the __builtin_bswap64 intrinsic,
+  // which emits an efficient endianness swap regardless of machine
+  // architecture.
+  size_t stride = sizeof(uint64_t);
+  size_t big_steps = n / stride;
+  size_t small_steps = n % stride;
+  // Big copy-and-swap steps.
   for (size_t i = 0; i < big_steps; i++) {
-    unsigned long long const *big_ptr = (unsigned long long const *)ptr;
-    unsigned long long block = big_ptr[i];
-    if (block == 0) {
-      result += sizeof(unsigned long long);
-    } else {
-      // Look deeper inside.
-      size_t current_byte_position = i * sizeof(unsigned long long);
-      for (size_t j = 0; j < sizeof(unsigned long long); j++) {
-        unsigned char byte = ptr[current_byte_position + j];
-        if (byte != 0) {
-          return result;
-        } else {
-          result++;
-        }
-      }
-    }
+    uint64_t const *read_ptr = (uint64_t const *)(src + src_len - i * stride);
+    uint64_t *write_ptr = (uint64_t *)(dest + i * stride);
+    uint64_t const big_read = *read_ptr;
+    *write_ptr = __builtin_bswap64(big_read);
   }
-  // Big strides were all zeroes, check whatever remains at the end slowly.
-  size_t small_step_start = big_steps * sizeof(unsigned long long);
+  size_t small_step_start = big_steps * stride;
+  // Small copy-and-swap steps.
   for (size_t i = 0; i < small_steps; i++) {
-    unsigned char byte = ptr[small_step_start + i];
-    if (byte != 0) {
-      return result;
-    } else {
-      result++;
-    }
+    uint8_t const *read_ptr =
+        (uint8_t const *)(src + src_len - small_step_start - i);
+    uint8_t *write_ptr = (uint8_t *)(dest + small_step_start + i);
+    uint8_t const small_read = *read_ptr;
+    *write_ptr = small_read;
   }
-  // If we get this far, there's nothing to find.
-  return len;
-}
-
-size_t find_last_nonzero(unsigned char const *ptr, size_t len) {
-  size_t big_steps = len / sizeof(unsigned long long);
-  size_t small_steps = len % sizeof(unsigned long long);
-  // Based on https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord,
-  // using the hasless method, expanded to 8 bytes instead of 4. This requires
-  // two masks.
-  unsigned long long low_bit_mask = 0x0101010101010101ULL;
-  unsigned long long high_bit_mask = 0x8080808080808080ULL;
-  size_t result = 0;
-  for (size_t i = 0; i < big_steps; i++) {
-    unsigned long long const *big_ptr = (unsigned long long const *)ptr;
-    unsigned long long block = big_ptr[i];
-    // Check if we are anywhere zero.
-    if ((block - low_bit_mask) & ~block & high_bit_mask) {
-      // Look deeper inside.
-      size_t current_byte_position = i * sizeof(unsigned long long);
-      size_t last_known_nonzero = 0;
-      for (size_t j = 0; j < sizeof(unsigned long long); j++) {
-        unsigned char byte = ptr[current_byte_position + j];
-        if (byte != 0) {
-          last_known_nonzero = i;
-        }
-      }
-      return current_byte_position + last_known_nonzero;
-    } else {
-      result += sizeof(unsigned long long);
-    }
-  }
-  // Big strides were all nonzeroes, check whatever remains at the end slowly.
-  size_t small_step_start = big_steps * sizeof(unsigned long long);
-  size_t last_known_nonzero = 0;
-  bool found_anything_at_all = false;
-  for (size_t i = 0; i < small_steps; i++) {
-    unsigned char byte = ptr[small_step_start + i];
-    if (byte != 0) {
-      found_anything_at_all = true;
-      last_known_nonzero = i;
-    }
-  }
-  // If we found any nonzeroes, that gives us the real position.
-  if (found_anything_at_all) {
-    return small_step_start + last_known_nonzero;
-  } else {
-    // If we get this far, there's nothing to find.
-    return len;
-  }
+  // We return the destination for uniformity of interface with memcpy.
+  return dest;
 }
