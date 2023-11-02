@@ -11,14 +11,14 @@ import GHC.Err (error)
 import GHC.Exts (Int (I#))
 import GHC.Num.WordArray (wordsToBytes#)
 
--- GHC's Integer uses a limbed representation, with each limb being a machine
--- word: effectively, it is a base 2^k system, where k is the number of bits per
--- word. Since GHC allows Word# to vary in width, but _bytes_ are fixed, we need
+-- | GHC's 'GHC.Integer.Integer' uses a limbed representation, with each limb being a machine
+-- word: effectively, it is a base @2^k@ system, where @k@ is the number of bits per
+-- word. Since GHC allows 'GHC.Exts.Word#' to vary in width, but _bytes_ are fixed, we need
 -- this constant for padding purposes.
 bytesPerWord :: Int
 bytesPerWord = $$([||I# (wordsToBytes# 1#)||])
 
--- We only support Tier 1 platforms
+-- | We only support Tier 1 platforms
 -- (https://gitlab.haskell.org/ghc/ghc/-/wikis/platforms#tier-1-platforms), and
 -- to ensure this, we verify, at compile time, that we have a little-endian
 -- native byte order, erroring out of compilation if we don't. This allows the

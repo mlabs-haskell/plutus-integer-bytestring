@@ -1,5 +1,7 @@
 packages: ./plutus-integer-bytestring.cabal
 
+tests: true
+
 documentation: true
 
 test-show-details: direct

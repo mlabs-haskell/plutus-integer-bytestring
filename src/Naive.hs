@@ -8,9 +8,10 @@
 
 module Naive (toByteString) where
 
-import BSUtils (copyBytes, copyBytesReversed)
+import BSUtils (copyBytes, ptrReverse)
 import CTConstants (bytesPerWord)
 import Control.Applicative (pure, (*>))
+import Control.Monad (when)
 import Data.Bool (otherwise)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -86,6 +87,15 @@ import System.IO.Unsafe (unsafeDupablePerformIO)
 -- = Important note
 --
 -- Negative `Integer`s cannot be converted and will fail.
+--
+-- = Properties
+--
+-- Throughout, @i@ is a \'sensible\' argument (meaning, not negative).
+--
+-- 1. @fst <$> uncons (toByteString d LittleEndian i)@ @=@ @Just (fromIntegral
+--    $ i `rem` 256)@
+-- 2. @snd <$> unsnoc (toByteString d BigEndian i)@ @=@ @Just (fromIntegral
+--    $ i `rem` 256)@
 toByteString :: Int -> ByteOrder -> Integer -> ByteString
 toByteString requestedLength requestedByteOrder = \case
   IS i# ->
@@ -262,8 +272,7 @@ convertLarge requestedLength requestedByteOrder ba# =
         --
         -- Because we have mis-matched arguments (ByteArray# as a source, Ptr
         -- Word8 as a destination), and that reverse copying isn't implemented
-        -- anyway, we have to resort to the FFI: see the definitions of
-        -- copyBytes and copyBytesReversed for a description of why they work.
-        case requestedByteOrder of
-          BigEndian -> copyBytesReversed ptr ba# minimalLength baLength
-          LittleEndian -> copyBytes ptr ba# minimalLength
+        -- anyway, we have to resort to the FFI: see the definition of
+        -- copyBytes for why.
+        copyBytes ptr ba# minimalLength
+        when (requestedByteOrder == BigEndian) (ptrReverse ptr finalLength)
