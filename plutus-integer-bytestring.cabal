@@ -34,7 +34,10 @@ common test-lang
   ghc-options:   -O2 -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , plutus-integer-bytestring
+    , QuickCheck
     , tasty
+    , tasty-quickcheck
+    , test-utils
 
 -- Library
 
@@ -59,20 +62,35 @@ library bsutils
   cc-options:      -Wall -Wextra -Werror -O2
   hs-source-dirs:  bsutils
 
--- Tests
-
-test-suite tests
-  import:         test-lang
-  type:           exitcode-stdio-1.0
-  main-is:        Main.hs
-  other-modules:
+library test-utils
+  import:          lang
+  exposed-modules:
+    BytesWithIndex
     Helpers
     SuitableInteger
 
   build-depends:
     , bytestring
     , QuickCheck
-    , tasty-quickcheck
-    , transformers
+    , quickcheck-instances
 
-  hs-source-dirs: test
+  hs-source-dirs:  test-utils
+
+-- Tests
+
+test-suite naive-tests
+  import:         test-lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  build-depends:  bytestring
+  hs-source-dirs: test/naive
+
+test-suite bsutils-tests
+  import:         test-lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  build-depends:
+    , bsutils
+    , bytestring
+
+  hs-source-dirs: test/bsutils

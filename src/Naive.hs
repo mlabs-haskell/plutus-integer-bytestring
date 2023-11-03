@@ -28,12 +28,10 @@ import GHC.Exts
     Int (I#),
     Int#,
     Ptr,
-    Word#,
     clz#,
     int2Word#,
     isTrue#,
     quotRemInt#,
-    quotRemWord#,
     sizeofByteArray#,
     word2Int#,
     wordToWord8#,
@@ -41,7 +39,6 @@ import GHC.Exts
     (==#),
   )
 import GHC.Num (subtract, (+), (-))
-import GHC.Num.BigNat (bigNatSize, bigNatToWord#)
 import GHC.Num.Integer (Integer (IN, IP, IS))
 import GHC.Num.WordArray (wordArrayLast#)
 import GHC.Real (quot)
@@ -90,23 +87,27 @@ import System.IO.Unsafe (unsafeDupablePerformIO)
 --
 -- = Properties
 --
--- Throughout, @i@ is a \'sensible\' argument (meaning, not negative).
+-- Throughout, @i@ is a \'sensible\' argument (meaning, not negative), and @k@
+-- is positive.
 --
 -- 1. @fst <$> uncons (toByteString d LittleEndian i)@ @=@ @Just (fromIntegral
 --    $ i `rem` 256)@
--- 2. @snd <$> unsnoc (toByteString d BigEndian i)@ @=@ @Just (fromIntegral
---    $ i `rem` 256)@
+-- 2. @toByteString d LittleEndian (fromIntegral w8)@ @=@ @cons w8 (replicate
+--    (max 0 (d - 1) 0))@
+-- 3. @toByteString d LittleEndian i@ @=@ @reverse (toByteString d BigEndian i)@
+--
+-- Properties 1 and 3 together imply the following:
+--
+-- - @snd <$> unsnoc (toByteString d BigEndian i)@ @=@ @Just (fromIntegral
+--   $ i `rem` 256)@
 toByteString :: Int -> ByteOrder -> Integer -> ByteString
 toByteString requestedLength requestedByteOrder = \case
   IS i# ->
     if
         | isTrue# (i# <# 0#) -> error "toByteString: cannot convert a negative Integer"
-        | isTrue# (i# ==# 0#) -> BS.singleton 0
+        | isTrue# (i# ==# 0#) -> BS.replicate (max 1 requestedLength) 0
         | otherwise -> convertSmall requestedLength requestedByteOrder i#
-  IP bn# ->
-    if bigNatSize bn# == 1
-      then convertOneLimb requestedLength requestedByteOrder (bigNatToWord# bn#)
-      else convertLarge requestedLength requestedByteOrder bn#
+  IP bn# -> convertLarge requestedLength requestedByteOrder bn#
   IN _ -> error "toByteString: cannot convert a negative Integer"
 
 -- Helpers
@@ -189,37 +190,12 @@ convertSmall requestedLength requestedByteOrder i# =
               byteToWrite = W8# (wordToWord8# (int2Word# r#))
            in pokeByteOff ptr ix byteToWrite *> go ptr (move ix) limit move q#
 
--- This uses the same approach as convertSmall, but with the added benefit of
--- knowing for a fact that we need at least a whole machine word's worth of
--- bytes. This is because if we needed (potentially) fewer, the Integer would
--- use the optimized representation as an Int#, and if we needed more, we'd have
--- at least one more limb. Thus, instead of having to calculate how many bytes
--- we need minimally, we just assume we need all of them. This also simplifies
--- the write loop, as it can now run for a fixed number of cycles.
-convertOneLimb :: Int -> ByteOrder -> Word# -> ByteString
-convertOneLimb requestedLength requestedByteOrder w# =
-  let finalLength = max bytesPerWord requestedLength
-      indexes = case requestedByteOrder of
-        BigEndian -> [bytesPerWord - 1, bytesPerWord - 2 .. 0]
-        LittleEndian -> [0, 1 .. bytesPerWord - 1]
-   in unsafeDupablePerformIO $ BSI.create finalLength $ \ptr -> do
-        fillBytes ptr 0 finalLength
-        go ptr w# indexes
-  where
-    go :: Ptr Word8 -> Word# -> [Int] -> IO ()
-    go ptr acc# = \case
-      [] -> pure ()
-      (ix : ixes) ->
-        let !(# q#, r# #) = quotRemWord# acc# 256##
-            byteToWrite = W8# (wordToWord8# r#)
-         in pokeByteOff ptr ix byteToWrite *> go ptr q# ixes
-
--- Handle the 'large' case, where we know we have at least two limbs in the
+-- Handle the 'large' case, where we know we have at least one full limb in the
 -- representation.
 --
 -- = Preconditions
 --
--- 1. @bn#@ has at least two elements
+-- 1. @bn#@ has at least one elements
 --
 -- = Algorithm
 --

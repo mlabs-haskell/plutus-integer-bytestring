@@ -5,7 +5,7 @@ module Main (main) where
 
 import CTConstants (bytesPerWord)
 import Control.Category ((.))
-import Data.ByteString (length, uncons, unsnoc)
+import Data.ByteString (cons, replicate, reverse, uncons)
 import Data.Eq ((==))
 import Data.Function (($))
 import Data.Functor ((<$>))
@@ -13,8 +13,9 @@ import Data.Int (Int)
 import Data.Maybe (Maybe (Just))
 import Data.Ord (max, (<), (>))
 import Data.Semigroup ((<>))
-import Data.Tuple (fst, snd)
+import Data.Tuple (fst)
 import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
+import GHC.Num ((-))
 import GHC.Real (fromIntegral, rem)
 import Helpers (hexByteString)
 import Naive (toByteString)
@@ -25,7 +26,6 @@ import Test.QuickCheck
     classify,
     counterexample,
     property,
-    (.&.),
     (===),
   )
 import Test.Tasty
@@ -39,12 +39,12 @@ import Test.Tasty.QuickCheck (QuickCheckTests, testProperty)
 
 main :: IO ()
 main =
-  defaultMain . adjustOption moreTests . testGroup "Properties" $
+  defaultMain . adjustOption moreTests . testGroup "Naive implementation properties" $
     [ testGroup
         "toByteString"
         [ toByteStringProp1,
           toByteStringProp2,
-          minimalByteCountCorrect
+          toByteStringProp3
         ]
     ]
   where
@@ -69,44 +69,35 @@ toByteStringProp1 = testProperty propName . property $ \d i ->
   where
     propName :: TestName
     propName =
-      "fst <$> uncons (toByteString d LittleEndian i) "
-        <> "="
-        <> " Just (fromIntegral $ i `rem` 256)"
+      "fst <$> uncons (toByteString d LittleEndian i)"
+        <> " = "
+        <> "Just (fromIntegral $ i `rem` 256)"
 
 toByteStringProp2 :: TestTree
-toByteStringProp2 = testProperty propName . property $ \i d ->
-  let i' = toInteger i
-      expected = Just (fromIntegral $ i' `rem` 256)
-      converted = toByteString d BigEndian i'
-      convertedLE = toByteString d LittleEndian i'
-      actual = snd <$> unsnoc converted
-   in counterexample ("ConvertedByteString: " <> hexByteString converted)
-        . counterexample ("Equivalent LE: " <> hexByteString convertedLE)
-        . classifyTBSCodePath (countBytes i')
-        $ expected === actual
+toByteStringProp2 = testProperty propName . property $ \d w8 ->
+  let i = fromIntegral w8
+      expected = cons w8 (replicate (max 0 (d - 1)) 0)
+      actual = toByteString d LittleEndian i
+   in expected === actual
   where
     propName :: TestName
     propName =
-      "snd <$> unsnoc (toByteString d BigEndian i) "
-        <> "="
-        <> " Just (fromIntegral $ i `rem` 256)"
+      "toByteString d LittleEndian (fromIntegral w8)"
+        <> " = "
+        <> "cons w8 (replicate (max 0 (d - 1)) 0)"
 
-minimalByteCountCorrect :: TestTree
-minimalByteCountCorrect = testProperty propName . property $ \i ->
+toByteStringProp3 :: TestTree
+toByteStringProp3 = testProperty propName . property $ \d i ->
   let i' = toInteger i
-      expected = countBytes i'
-      actualLE = length (toByteString 0 LittleEndian i')
-      actualBE = length (toByteString 0 BigEndian i')
-   in classifyTBSCodePath expected $
-        expected === actualLE .&. expected === actualBE
+      expected = reverse (toByteString d BigEndian i')
+      actual = toByteString d LittleEndian i'
+   in classifyTBSCodePath (countBytes i') $ expected === actual
   where
     propName :: TestName
     propName =
-      "countBytes i"
+      "toByteString d LittleEndian i"
         <> " = "
-        <> "length (toByteString 0 LittleEndian i)"
-        <> " = "
-        <> "length (toByteString 0 BigEndian i)"
+        <> "reverse (toByteString d BigEndian i)"
 
 -- Helpers
 
