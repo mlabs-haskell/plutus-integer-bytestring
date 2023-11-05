@@ -3,14 +3,16 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Naive (toByteString) where
+module Naive (toByteString, fromByteString) where
 
 import BSUtils (copyBytes, copyBytesReverse)
 import CTConstants (bytesPerWord)
 import Control.Applicative (pure, (*>))
+import Data.Bits (unsafeShiftL)
 import Data.Bool (otherwise)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -37,10 +39,10 @@ import GHC.Exts
     (<#),
     (==#),
   )
-import GHC.Num (subtract, (+), (-))
+import GHC.Num (subtract, (*), (+), (-))
 import GHC.Num.Integer (Integer (IN, IP, IS))
 import GHC.Num.WordArray (wordArrayLast#)
-import GHC.Real (quot)
+import GHC.Real (fromIntegral, quot)
 import GHC.Word (Word8 (W8#))
 import System.IO (IO)
 
@@ -85,8 +87,7 @@ import System.IO (IO)
 --
 -- = Properties
 --
--- Throughout, @i@ is a \'sensible\' argument (meaning, not negative), and @k@
--- is positive.
+-- Throughout, @i@ is not negative, and @k@ is positive.
 --
 -- 1. @fst <$> uncons (toByteString d LittleEndian i)@ @=@ @Just (fromIntegral
 --    $ i `rem` 256)@
@@ -107,6 +108,83 @@ toByteString requestedLength requestedByteOrder = \case
         | otherwise -> convertSmall requestedLength requestedByteOrder i#
   IP bn# -> convertLarge requestedLength requestedByteOrder bn#
   IN _ -> error "toByteString: cannot convert a negative Integer"
+
+-- | Given a byte order for the representation (as per the Representation
+-- section of the 'toByteString' documentation) and a 'ByteString'
+-- representation, produce its corresponding 'Integer'.
+--
+-- = Representation
+--
+-- If the stated byte order is little-endian, the given representation is as
+-- follows:
+--
+-- 1. The base-256 digits encoding the number, in ascending place value; then
+-- 2. Zero or more padding bytes, all of which are zero.
+--
+-- If the stated byte order is big-endian, the given representation is instead
+-- as follows:
+--
+-- 1. Zero or more padding bytes, all of which are zero; then
+-- 2. The base-256 digits encoding the number, in descending place value.
+--
+-- The only exception to both of these is zero, which is simply a non-zero
+-- number of zero bytes.
+--
+-- = Algorithm
+--
+-- 1. If the given 'ByteString' is empty, error and stop.
+-- 2. Convert each digit into its place value, then sum them and return the
+--    result.
+--
+-- = Important note
+--
+-- Empty 'ByteStrings' cannot be converted and will fail.
+--
+-- = Properties
+--
+-- Throughout, @n@ is positive, @i@ is not negative, @b@ is not zero and @bs@ is
+-- not empty.
+--
+-- 1. @fromByteString BigEndian (replicate n b)@ @=@ @fromByteString
+--    LittleEndian (replicate n b)@
+-- 2. @fromByteString sbo (singleton w8)@ @=@ @fromIntegral w8@
+-- 3. @fromByteString bo (toByteString k bo i)@ @=@ @i@
+-- 4. @fromByteString LittleEndian (bs <> replicate n 0)@ @=@ @fromByteString
+--    LittleEndian bs@
+--
+-- Properties 3 and 4, together with Property 3 of 'toByteString' imply the
+-- following:
+--
+-- - @fromByteString BigEndian (replicate n 0 <> bs)@ @=@ @fromByteString
+--   BigEndian bs@
+fromByteString :: ByteOrder -> ByteString -> Integer
+fromByteString statedByteOrder bs = case len of
+  -- Step 1
+  0 -> error "fromByteString: cannot convert empty ByteString"
+  _ ->
+    let startingShift = case statedByteOrder of
+          BigEndian -> 8 * (len - 1)
+          LittleEndian -> 0
+     in go 0 0 startingShift
+  where
+    len :: Int
+    len = BS.length bs
+    adjustShift :: Int -> Int
+    adjustShift = case statedByteOrder of
+      BigEndian -> subtract 8
+      LittleEndian -> (+ 8)
+    go :: Integer -> Int -> Int -> Integer
+    go acc ix shift
+      | ix == len = acc
+      | otherwise = case BS.index bs ix of
+          -- Zero digits have zero place value regardless of where they are.
+          -- Instead of making an Integer just to throw it away again, we skip
+          -- any zero digits completely.
+          0 -> go acc (ix + 1) (adjustShift shift)
+          w8 ->
+            let digit :: Integer = fromIntegral w8
+                placeValue = digit `unsafeShiftL` shift
+             in go (acc + placeValue) (ix + 1) (adjustShift shift)
 
 -- Helpers
 

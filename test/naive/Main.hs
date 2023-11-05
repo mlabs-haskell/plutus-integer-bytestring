@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -5,7 +6,13 @@ module Main (main) where
 
 import CTConstants (bytesPerWord)
 import Control.Category ((.))
-import Data.ByteString (cons, replicate, reverse, uncons)
+import Data.ByteString
+  ( cons,
+    replicate,
+    reverse,
+    singleton,
+    uncons,
+  )
 import Data.Eq ((==))
 import Data.Function (($))
 import Data.Functor ((<$>))
@@ -18,14 +25,17 @@ import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Num ((-))
 import GHC.Real (fromIntegral, rem)
 import Helpers (hexByteString)
-import Naive (toByteString)
+import NEByteString qualified as NEBS
+import Naive (fromByteString, toByteString)
 import SuitableInteger (countBytes, toInteger)
 import System.IO (IO)
 import Test.QuickCheck
-  ( Property,
+  ( Positive (Positive),
+    Property,
     classify,
     counterexample,
     property,
+    (.&.),
     (===),
   )
 import Test.Tasty
@@ -45,6 +55,13 @@ main =
         [ toByteStringProp1,
           toByteStringProp2,
           toByteStringProp3
+        ],
+      testGroup
+        "fromByteString"
+        [ fromByteStringProp1,
+          fromByteStringProp2,
+          fromByteStringProp3,
+          fromByteStringProp4
         ]
     ]
   where
@@ -98,6 +115,59 @@ toByteStringProp3 = testProperty propName . property $ \d i ->
       "toByteString d LittleEndian i"
         <> " = "
         <> "reverse (toByteString d BigEndian i)"
+
+fromByteStringProp1 :: TestTree
+fromByteStringProp1 = testProperty propName . property $ \(Positive n) w8 ->
+  let input = replicate n w8
+      outcomeBE = fromByteString BigEndian input
+      outcomeLE = fromByteString LittleEndian input
+   in outcomeBE === outcomeLE
+  where
+    propName :: TestName
+    propName =
+      "fromByteString BigEndian (replicate n b)"
+        <> " = "
+        <> "fromByteString LittleEndian (replicate n b)"
+
+fromByteStringProp2 :: TestTree
+fromByteStringProp2 = testProperty propName . property $ \w8 ->
+  let expected = fromIntegral w8
+      input = singleton w8
+      actualBE = fromByteString BigEndian input
+      actualLE = fromByteString LittleEndian input
+   in (expected === actualBE) .&. (expected === actualLE)
+  where
+    propName :: TestName
+    propName =
+      "fromByteString sbo (singleton w8)"
+        <> " = "
+        <> "fromIntegral w8"
+
+fromByteStringProp3 :: TestTree
+fromByteStringProp3 = testProperty propName . property $ \i k ->
+  let i' = toInteger i
+      actualLE = fromByteString LittleEndian (toByteString k LittleEndian i')
+      actualBE = fromByteString BigEndian (toByteString k BigEndian i')
+   in classifyTBSCodePath (countBytes i') $ (i' === actualLE) .&. (i' === actualBE)
+  where
+    propName :: TestName
+    propName =
+      "fromByteString bo (toByteString k bo i)"
+        <> " = "
+        <> "i"
+
+fromByteStringProp4 :: TestTree
+fromByteStringProp4 = testProperty propName . property $ \neBS (Positive n) ->
+  let bs = NEBS.toByteString neBS
+      expected = fromByteString LittleEndian bs
+      actual = fromByteString LittleEndian (bs <> replicate n 0)
+   in expected === actual
+  where
+    propName :: TestName
+    propName =
+      "fromByteString LittleEndian (bs <> replicate n 0)"
+        <> " = "
+        <> "fromByteString LittleEndian bs"
 
 -- Helpers
 

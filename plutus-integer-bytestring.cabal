@@ -65,8 +65,8 @@ library bsutils
 library test-utils
   import:          lang
   exposed-modules:
-    BytesWithIndex
     Helpers
+    NEByteString
     SuitableInteger
 
   build-depends:
@@ -84,13 +84,3 @@ test-suite naive-tests
   main-is:        Main.hs
   build-depends:  bytestring
   hs-source-dirs: test/naive
-
-test-suite bsutils-tests
-  import:         test-lang
-  type:           exitcode-stdio-1.0
-  main-is:        Main.hs
-  build-depends:
-    , bsutils
-    , bytestring
-
-  hs-source-dirs: test/bsutils
