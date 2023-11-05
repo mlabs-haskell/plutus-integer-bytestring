@@ -8,10 +8,9 @@
 
 module Naive (toByteString) where
 
-import BSUtils (copyBytes, ptrReverse)
+import BSUtils (copyBytes, copyBytesReverse)
 import CTConstants (bytesPerWord)
 import Control.Applicative (pure, (*>))
-import Control.Monad (when)
 import Data.Bool (otherwise)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -44,7 +43,6 @@ import GHC.Num.WordArray (wordArrayLast#)
 import GHC.Real (quot)
 import GHC.Word (Word8 (W8#))
 import System.IO (IO)
-import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- | Given a desired byte length and a desired byte order (see below), as
 -- well as a non-negative integer, constructs its byte-based representation.
@@ -149,13 +147,14 @@ convertSmall requestedLength requestedByteOrder i# =
         LittleEndian -> (0, minimalLength, (+ 1))
    in -- Step 2
       --
-      -- We make use of unsafeDupablePerformIO here; this is completely safe, as
-      -- we only do it to allow mutable construction of a ByteString. Doing so
-      -- immutably (by using concatenations, a builder or converting a list)
-      -- would be intolerably slow and memory-consuming, especially when padding
-      -- bytes are taken into account. This is a common pattern in ByteString
-      -- internals.
-      unsafeDupablePerformIO $ BSI.create finalLength $ \ptr -> do
+      -- unsafeCreate allows us to mutably construct the result. While it looks
+      -- scary, it's completely safe here, as we don't leak the internal Ptr to
+      -- the outside world. Making this string immutably (by using
+      -- concatenations, a builder or converting a list) would be intolerably
+      -- slow and memory-consuming, especially when we take padding bytes into
+      -- account. This kind of construction is also a common pattern in the
+      -- bytestring library itself.
+      BSI.unsafeCreate finalLength $ \ptr -> do
         fillBytes ptr 0 finalLength
         go ptr start stop move i#
   where
@@ -195,7 +194,7 @@ convertSmall requestedLength requestedByteOrder i# =
 --
 -- = Preconditions
 --
--- 1. @bn#@ has at least one elements
+-- 1. @bn#@ has at least one element
 --
 -- = Algorithm
 --
@@ -232,9 +231,8 @@ convertLarge requestedLength requestedByteOrder ba# =
       finalLength = max minimalLength requestedLength
    in -- Step 2
       --
-      -- The same reasoning for unsafeDupablePerformIO as for Step 2 of
-      -- convertSmall applies here.
-      unsafeDupablePerformIO $ BSI.create finalLength $ \ptr -> do
+      -- The same reasoning for unsafeCreate as for Step 2 of convertSmall applies here.
+      BSI.unsafeCreate finalLength $ \ptr -> do
         fillBytes ptr 0 finalLength
         -- Step 3
         --
@@ -250,5 +248,6 @@ convertLarge requestedLength requestedByteOrder ba# =
         -- Word8 as a destination), and that reverse copying isn't implemented
         -- anyway, we have to resort to the FFI: see the definition of
         -- copyBytes for why.
-        copyBytes ptr ba# minimalLength
-        when (requestedByteOrder == BigEndian) (ptrReverse ptr finalLength)
+        case requestedByteOrder of
+          LittleEndian -> copyBytes ptr ba# minimalLength
+          BigEndian -> copyBytesReverse ptr ba# minimalLength finalLength

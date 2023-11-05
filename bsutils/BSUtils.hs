@@ -2,7 +2,7 @@
 {-# LANGUAGE UnliftedFFITypes #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module BSUtils (copyBytes, ptrReverse) where
+module BSUtils (copyBytes, copyBytesReverse) where
 
 import Data.Functor (void)
 import Data.Word (Word8)
@@ -39,14 +39,18 @@ copyBytes ::
 copyBytes ptr ba# len =
   void (cMemcpy (castPtr ptr) ba# (fromIntegral len))
 
--- | Reverses the bytes in the region of memory pointed by the first argument,
--- to an extent specified by the second argument (which must be a positive
--- number).
-ptrReverse ::
+-- | Copies the specified number of bytes (which must be a positive number) from
+-- the 'ByteArray#' argument to the 'Ptr' Word8' argument (starting at the
+-- end). Where the \'end\' is will be determined by the second 'Int' argument,
+-- and the bytes will be copied in reverse.
+copyBytesReverse ::
   Ptr Word8 ->
+  ByteArray# ->
+  Int ->
   Int ->
   IO ()
-ptrReverse ptr len = cReverse (castPtr ptr) (fromIntegral len)
+copyBytesReverse ptr ba# len end =
+  cMemcpyR (castPtr ptr) ba# (fromIntegral len) (fromIntegral end)
 
 foreign import ccall "string.h memcpy"
   cMemcpy ::
@@ -55,8 +59,10 @@ foreign import ccall "string.h memcpy"
     CSize ->
     IO (Ptr Word8)
 
-foreign import ccall "bsutils.h reverse"
-  cReverse ::
+foreign import ccall "bsutils.h memcpy_r"
+  cMemcpyR ::
     Ptr CUChar ->
+    ByteArray# ->
+    CSize ->
     CSize ->
     IO ()

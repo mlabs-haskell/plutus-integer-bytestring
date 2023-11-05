@@ -1,11 +1,8 @@
 #include "bsutils.h"
 
-void reverse(unsigned char *src, size_t len) {
-  size_t limit = len / 2;
-  for (size_t i = 0; i < limit; i++) {
-    unsigned char leading = src[i];
-    unsigned char trailing = src[len - i - 1];
-    src[i] = trailing;
-    src[len - i - 1] = leading;
+void memcpy_r(unsigned char *dst, unsigned char const *src, size_t len,
+              size_t end) {
+  for (size_t i = 0; i < len; i++) {
+    dst[end - 1 - i] = src[i];
   }
 }
