@@ -39,6 +39,13 @@ common test-lang
     , tasty-quickcheck
     , test-utils
 
+common bench-lang
+  import:        lang
+  ghc-options:   -O2 -rtsopts -fproc-alignment=64 "-with-rtsopts=-A32m -T"
+  build-depends:
+    , plutus-integer-bytestring
+    , tasty-bench
+
 -- Library
 
 library
@@ -84,3 +91,12 @@ test-suite naive-tests
   main-is:        Main.hs
   build-depends:  bytestring
   hs-source-dirs: test/naive
+
+-- Benchmarks
+
+benchmark naive-bench
+  import:         bench-lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  build-depends:  bytestring
+  hs-source-dirs: bench/naive

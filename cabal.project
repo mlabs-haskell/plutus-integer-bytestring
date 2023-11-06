@@ -2,6 +2,8 @@ packages: ./plutus-integer-bytestring.cabal
 
 tests: true
 
+benchmarks: true
+
 documentation: true
 
 test-show-details: direct
