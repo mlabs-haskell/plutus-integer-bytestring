@@ -26,6 +26,65 @@ import Test.Tasty.Bench
   )
 import Text.Show (show)
 
+-- = Note on our use of (typed) TH
+--
+-- We use typed TH to programmatically define our benches. The reason we use
+-- this method stems fundamentally from the issue described here:
+-- https://github.com/Bodigrim/tasty-bench#isolating-interfering-benchmarks . In
+-- short, we have non-trivially sized data, which we have to ensure doesn't
+-- interfere with our measurements.
+--
+-- This basically gives us three possibilities:
+--
+-- 1. Use manually-defined (and very repetitive) benchmarks.
+-- 2. Use the fix suggested in the link.
+-- 3. Use typed TH.
+--
+-- 1 is not an adequate solution: it is tedious, brittle, repetitive and
+-- non-extensible. 2 will not work, both env and withResource require a
+-- compile-time-known test structure, which (although _technically_ the case for
+-- us) GHC and Tasty cannot prove, which produces an error instead of running.
+-- Thus, the only remaining option is 3, which effectively acts to convince both
+-- GHC and Tasty that our benchmarking structure truly is static.
+--
+-- = Note on benchmarking data
+--
+-- Broadly, we want our benchmarks to answer the following questions:
+--
+-- 1. Does (requested or specified) byte order affect performance, all other
+--    things being equal?
+-- 2. How does more versus less padding affect performance?
+-- 3. Is a conversion in one direction costlier than in the other, assuming
+--    equivalent representations?
+-- 4. How do the operations scale with larger inputs?
+--
+-- With these questions in mind, we decided to base our measurements on the byte
+-- size of what is going to be operated over. For toByteString, this will be the
+-- size of the resulting ByteString; for fromByteString, this will be the size
+-- of the input. We use two sets of sizes: a 'small' and a 'large' set. The
+-- 'small' set consists of sizes 1 through 8, while the 'large' set consists of
+-- sizes 16, 32, 64, 128, 256, 512 and 1024.We choose this separation to make
+-- the data easier to read, but also to give us a spread between 'small' inputs
+-- (which we regard as more typical) and 'large' inputs (which can come up, but
+-- less frequently). We use this distinction to help answer question 4.
+--
+-- To answer question 2, we test our operations in two different ways:
+--
+-- - Minimal padding (that is, every byte is significant); and
+-- - Maximal padding (that is, only one byte is significant).
+--
+-- This isolates the cost of padding from the cost of conversion.
+--
+-- The actual benchmarks consist of the following:
+--
+-- 1. toByteString, no padding, both endiannesses.
+-- 2. toByteString, maximal padding, both endiannesses.
+-- 3. fromByteString, no padding, both endiannesses.
+-- 4. fromByteString, maximal padding, both endiannesses.
+--
+-- By varying the endiannesses in each benchmark, keeping all else constant, we
+-- can answer question 1; by trying all sizes for both operations, we can answer
+-- question 3.
 main :: IO ()
 main =
   defaultMain
