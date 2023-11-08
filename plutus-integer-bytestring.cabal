@@ -33,7 +33,6 @@ common test-lang
   import:        lang
   ghc-options:   -O2 -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-    , plutus-integer-bytestring
     , QuickCheck
     , tasty
     , tasty-quickcheck
@@ -69,6 +68,7 @@ library bsutils
   include-dirs:    cbits
   c-sources:       cbits/bsutils.c
   cc-options:      -Wall -Wextra -Werror -O2
+  build-depends:   bytestring
   hs-source-dirs:  bsutils
 
 library test-utils
@@ -91,7 +91,10 @@ test-suite naive-tests
   import:         test-lang
   type:           exitcode-stdio-1.0
   main-is:        Main.hs
-  build-depends:  bytestring
+  build-depends:
+    , bytestring
+    , plutus-integer-bytestring
+
   hs-source-dirs: test/naive
 
 -- Benchmarks

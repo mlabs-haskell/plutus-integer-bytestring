@@ -1,4 +1,5 @@
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UnliftedFFITypes #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -7,10 +8,19 @@ module BSUtils
     copyBytes',
     copyBytesReverse,
     copyBytesReverse',
+    findNonZeroIndexes,
   )
 where
 
-import Data.Functor (void)
+import Control.Applicative ((<*>))
+import Data.ByteString
+  ( ByteString,
+    findIndex,
+    findIndexEnd,
+  )
+import Data.Eq ((/=))
+import Data.Functor (void, (<$>))
+import Data.Maybe (Maybe)
 import Data.Word (Word8)
 import Foreign.C.Types (CSize (CSize), CUChar)
 import Foreign.Ptr (Ptr, castPtr)
@@ -32,7 +42,7 @@ import System.IO (IO)
 -- unpinned, which makes it dangerous to convert to a pointer. We are, however,
 -- rescued by @UnliftedFFITypes@, which allows us two capabilities:
 --
--- 1. We can pass 'ByteArray#' directly to the FFI, which will convert to an
+-- 1. We can pass 'ByteArray#' directly to the FFI, which will convert to a
 --    @void*@ in our case.
 -- 2. The runtime will temporarily ensure that the memory backing the
 --    'ByteArray#' is pinned while the FFI call is in progress, making this
@@ -76,6 +86,11 @@ copyBytesReverse' ::
   IO ()
 copyBytesReverse' mba# ptr len end =
   cMemcpyR' mba# (castPtr ptr) (fromIntegral len) (fromIntegral end)
+
+-- | Combination of @'Data.ByteString.findIndex' ('/=' 0)@W and
+-- @'Data.ByteString.findIndexEnd' ('/=' 0)@.
+findNonZeroIndexes :: ByteString -> Maybe (Int, Int)
+findNonZeroIndexes bs = (,) <$> findIndex (/= 0) bs <*> findIndexEnd (/= 0) bs
 
 foreign import ccall "string.h memcpy"
   cMemcpy ::

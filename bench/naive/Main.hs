@@ -141,7 +141,7 @@ noPaddingDataLarge =
   scanl
     (\(ix, acc) shift -> (ix + shift, acc + acc `unsafeShiftL` shift))
     (16, start)
-    [16, 32, 64, 128, 256, 512]
+    [16, 32, 64, 128, 256, 512, 1024, 2048]
   where
     start :: Integer
     start = snd . last $ noPaddingData
@@ -151,13 +151,16 @@ noPaddingBSData :: [(Int, ByteString)]
 noPaddingBSData = fmap (\i -> (i, replicate i 0x8F)) [1, 2 .. 8]
 
 noPaddingBSDataLarge :: [(Int, ByteString)]
-noPaddingBSDataLarge = fmap (\i -> (i, replicate i 0x8F)) [16, 32, 64, 128, 256, 512, 1024]
+noPaddingBSDataLarge =
+  fmap
+    (\i -> (i, replicate i 0x8F))
+    [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
 
 padding :: [Int]
 padding = [0, 1 .. 7]
 
 paddingLarge :: [Int]
-paddingLarge = [15, 31, 63, 127, 255, 511, 1023]
+paddingLarge = [15, 31, 63, 127, 255, 511, 1023, 2047, 4095]
 
 -- Generators
 
