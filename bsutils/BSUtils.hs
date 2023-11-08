@@ -2,13 +2,19 @@
 {-# LANGUAGE UnliftedFFITypes #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module BSUtils (copyBytes, copyBytesReverse) where
+module BSUtils
+  ( copyBytes,
+    copyBytes',
+    copyBytesReverse,
+    copyBytesReverse',
+  )
+where
 
 import Data.Functor (void)
 import Data.Word (Word8)
 import Foreign.C.Types (CSize (CSize), CUChar)
 import Foreign.Ptr (Ptr, castPtr)
-import GHC.Exts (ByteArray#, Int)
+import GHC.Exts (ByteArray#, Int, MutableByteArray#, RealWorld)
 import GHC.Real (fromIntegral)
 import System.IO (IO)
 
@@ -39,6 +45,15 @@ copyBytes ::
 copyBytes ptr ba# len =
   void (cMemcpy (castPtr ptr) ba# (fromIntegral len))
 
+-- | Same as 'copyBytes', but with some argument shuffling.
+copyBytes' ::
+  MutableByteArray# RealWorld ->
+  Ptr Word8 ->
+  Int ->
+  IO ()
+copyBytes' mba# ptr len =
+  void (cMemcpy' mba# (castPtr ptr) (fromIntegral len))
+
 -- | Copies the specified number of bytes (which must be a positive number) from
 -- the 'ByteArray#' argument to the 'Ptr' Word8' argument (starting at the
 -- end). Where the \'end\' is will be determined by the second 'Int' argument,
@@ -52,6 +67,16 @@ copyBytesReverse ::
 copyBytesReverse ptr ba# len end =
   cMemcpyR (castPtr ptr) ba# (fromIntegral len) (fromIntegral end)
 
+-- | Same as 'copyBytesReverse', but with some argument shuffling.
+copyBytesReverse' ::
+  MutableByteArray# RealWorld ->
+  Ptr Word8 ->
+  Int ->
+  Int ->
+  IO ()
+copyBytesReverse' mba# ptr len end =
+  cMemcpyR' mba# (castPtr ptr) (fromIntegral len) (fromIntegral end)
+
 foreign import ccall "string.h memcpy"
   cMemcpy ::
     Ptr CUChar ->
@@ -59,10 +84,25 @@ foreign import ccall "string.h memcpy"
     CSize ->
     IO (Ptr Word8)
 
+foreign import ccall "string.h memcpy"
+  cMemcpy' ::
+    MutableByteArray# RealWorld ->
+    Ptr CUChar ->
+    CSize ->
+    IO (Ptr Word8)
+
 foreign import ccall "bsutils.h memcpy_r"
   cMemcpyR ::
     Ptr CUChar ->
     ByteArray# ->
+    CSize ->
+    CSize ->
+    IO ()
+
+foreign import ccall "bsutils.h memcpy_r"
+  cMemcpyR' ::
+    MutableByteArray# RealWorld ->
+    Ptr CUChar ->
     CSize ->
     CSize ->
     IO ()

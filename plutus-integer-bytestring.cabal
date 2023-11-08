@@ -53,11 +53,13 @@ library
   exposed-modules:
     CTConstants
     Naive
+    Optimized
 
   build-depends:
     , bsutils
     , bytestring
     , ghc-bignum
+    , primitive
 
   hs-source-dirs:  src
 
