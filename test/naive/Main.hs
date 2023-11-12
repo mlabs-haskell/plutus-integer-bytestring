@@ -4,7 +4,6 @@
 
 module Main (main) where
 
-import CTConstants (bytesPerWord)
 import Control.Category ((.))
 import Data.ByteString
   ( cons,
@@ -21,6 +20,8 @@ import Data.Maybe (Maybe (Just))
 import Data.Ord (max, (<), (>))
 import Data.Semigroup ((<>))
 import Data.Tuple (fst)
+import Data.Word (Word)
+import Foreign.Storable (sizeOf)
 import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Num ((-))
 import GHC.Real (fromIntegral, rem)
@@ -180,3 +181,6 @@ classifyTBSCodePath counted =
   classify (counted < bytesPerWord) "need less than one word's worth of bytes"
     . classify (counted == bytesPerWord) "need exactly one word's worth of bytes"
     . classify (counted > bytesPerWord) "need more than one word's worth of bytes"
+
+bytesPerWord :: Int
+bytesPerWord = sizeOf (0x0 :: Word)

@@ -22,8 +22,7 @@ import Data.List (foldl')
 import Data.Ord (Ord ((<)))
 import Data.Semigroup ((<>))
 import Data.Word (Word8)
-import GHC.Integer (Integer)
-import GHC.Num ((+))
+import GHC.Num (Integer, (+))
 import GHC.Real (fromIntegral)
 import Test.QuickCheck
   ( Arbitrary (arbitrary, shrink),

@@ -1,0 +1,137 @@
+Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+All.toByteString.no padding.1 bytes.little endian,215445,3124,956,0,35651584
+All.toByteString.no padding.1 bytes.big endian,210213,3924,956,0,36700160
+All.toByteString.no padding.2 bytes.little endian,340136,3514,1434,0,36700160
+All.toByteString.no padding.2 bytes.big endian,341772,1458,1434,0,36700160
+All.toByteString.no padding.3 bytes.little endian,444001,3348,1890,0,36700160
+All.toByteString.no padding.3 bytes.big endian,438975,5048,1890,0,36700160
+All.toByteString.no padding.4 bytes.little endian,559560,9762,2353,0,36700160
+All.toByteString.no padding.4 bytes.big endian,516822,5214,2366,0,36700160
+All.toByteString.no padding.5 bytes.little endian,670254,4498,2815,0,36700160
+All.toByteString.no padding.5 bytes.big endian,589615,5906,2815,0,36700160
+All.toByteString.no padding.6 bytes.little endian,723364,10884,3227,0,36700160
+All.toByteString.no padding.6 bytes.big endian,730428,12812,3284,0,36700160
+All.toByteString.no padding.7 bytes.little endian,830513,11122,3747,0,36700160
+All.toByteString.no padding.7 bytes.big endian,906855,15914,3734,0,36700160
+All.toByteString.no padding.8 bytes.little endian,895479,6680,4218,0,36700160
+All.toByteString.no padding.8 bytes.big endian,941714,15228,4200,0,36700160
+All.toByteString.no padding.16 bytes.little endian,971227,4118,4222,0,36700160
+All.toByteString.no padding.16 bytes.big endian,1034601,12056,4213,0,36700160
+All.toByteString.no padding.32 bytes.little endian,1314964,18494,5380,0,36700160
+All.toByteString.no padding.32 bytes.big endian,1318419,13716,5380,0,36700160
+All.toByteString.no padding.64 bytes.little endian,1888551,20894,7732,0,36700160
+All.toByteString.no padding.64 bytes.big endian,1890759,23166,7753,0,36700160
+All.toByteString.no padding.128 bytes.little endian,3045204,60000,12691,1,36700160
+All.toByteString.no padding.128 bytes.big endian,3078415,36654,12690,1,36700160
+All.toByteString.no padding.256 bytes.little endian,5368500,92432,22370,3,36700160
+All.toByteString.no padding.256 bytes.big endian,5376609,31448,22726,2,36700160
+All.toByteString.no padding.512 bytes.little endian,10191707,91914,43172,11,36700160
+All.toByteString.no padding.512 bytes.big endian,10348867,115454,43154,11,36700160
+All.toByteString.no padding.1024 bytes.little endian,20198633,244422,87882,42,36700160
+All.toByteString.no padding.1024 bytes.big endian,20074192,196520,87490,43,36700160
+All.toByteString.no padding.2048 bytes.little endian,40821121,707166,189758,228,36700160
+All.toByteString.no padding.2048 bytes.big endian,40753632,704022,188314,246,36700160
+All.toByteString.no padding.4096 bytes.little endian,83791814,1029742,441616,1489,36700160
+All.toByteString.no padding.4096 bytes.big endian,82553557,1284766,441616,1634,36700160
+All.toByteString.with padding.1 bytes (0 padding).little endian,219849,3296,956,0,36700160
+All.toByteString.with padding.1 bytes (0 padding).big endian,215981,3706,967,0,36700160
+All.toByteString.with padding.2 bytes (1 padding).little endian,291158,3096,1349,0,36700160
+All.toByteString.with padding.2 bytes (1 padding).big endian,278214,3244,1355,0,36700160
+All.toByteString.with padding.3 bytes (2 padding).little endian,287215,3226,1349,0,36700160
+All.toByteString.with padding.3 bytes (2 padding).big endian,274109,1030,1366,0,36700160
+All.toByteString.with padding.4 bytes (3 padding).little endian,288813,5254,1349,0,36700160
+All.toByteString.with padding.4 bytes (3 padding).big endian,288633,3574,1359,0,36700160
+All.toByteString.with padding.5 bytes (4 padding).little endian,288703,5030,1349,0,36700160
+All.toByteString.with padding.5 bytes (4 padding).big endian,291171,4004,1349,0,36700160
+All.toByteString.with padding.6 bytes (5 padding).little endian,279832,2414,1367,0,36700160
+All.toByteString.with padding.6 bytes (5 padding).big endian,278114,4262,1349,0,36700160
+All.toByteString.with padding.7 bytes (6 padding).little endian,281245,6152,1367,0,36700160
+All.toByteString.with padding.7 bytes (6 padding).big endian,287778,5382,1349,0,36700160
+All.toByteString.with padding.8 bytes (7 padding).little endian,290297,5022,1367,0,36700160
+All.toByteString.with padding.8 bytes (7 padding).big endian,289345,4980,1367,0,36700160
+All.toByteString.with padding.16 bytes (15 padding).little endian,284080,4390,1368,0,36700160
+All.toByteString.with padding.16 bytes (15 padding).big endian,284782,3002,1375,0,36700160
+All.toByteString.with padding.32 bytes (31 padding).little endian,279398,1408,1412,0,36700160
+All.toByteString.with padding.32 bytes (31 padding).big endian,285132,4750,1401,0,36700160
+All.toByteString.with padding.64 bytes (63 padding).little endian,279545,2962,1478,0,36700160
+All.toByteString.with padding.64 bytes (63 padding).big endian,291832,3972,1478,0,36700160
+All.toByteString.with padding.128 bytes (127 padding).little endian,307777,5996,1601,0,36700160
+All.toByteString.with padding.128 bytes (127 padding).big endian,309431,4060,1598,0,36700160
+All.toByteString.with padding.256 bytes (255 padding).little endian,309000,3912,1855,0,36700160
+All.toByteString.with padding.256 bytes (255 padding).big endian,301968,2820,1858,0,36700160
+All.toByteString.with padding.512 bytes (511 padding).little endian,322604,4926,2373,0,36700160
+All.toByteString.with padding.512 bytes (511 padding).big endian,323183,5976,2373,0,36700160
+All.toByteString.with padding.1024 bytes (1023 padding).little endian,412955,5122,3395,0,36700160
+All.toByteString.with padding.1024 bytes (1023 padding).big endian,410307,2834,3386,0,36700160
+All.toByteString.with padding.2048 bytes (2047 padding).little endian,445987,7792,5433,0,36700160
+All.toByteString.with padding.2048 bytes (2047 padding).big endian,441422,6426,5440,0,36700160
+All.toByteString.with padding.4096 bytes (4095 padding).little endian,1722155,5606,9533,0,103809024
+All.toByteString.with padding.4096 bytes (4095 padding).big endian,850935,7512,9538,0,103809024
+All.fromByteString.no padding.1 bytes.littleEndian,235592,2544,1086,0,103809024
+All.fromByteString.no padding.1 bytes.big endian,270722,2260,1271,0,103809024
+All.fromByteString.no padding.2 bytes.littleEndian,377489,6862,1549,0,103809024
+All.fromByteString.no padding.2 bytes.big endian,395867,5200,1722,0,103809024
+All.fromByteString.no padding.3 bytes.littleEndian,480144,8874,2002,0,103809024
+All.fromByteString.no padding.3 bytes.big endian,530703,10470,2163,0,103809024
+All.fromByteString.no padding.4 bytes.littleEndian,615723,7170,2442,0,103809024
+All.fromByteString.no padding.4 bytes.big endian,652587,7306,2636,0,103809024
+All.fromByteString.no padding.5 bytes.littleEndian,706224,5312,2914,0,103809024
+All.fromByteString.no padding.5 bytes.big endian,762986,7102,3075,0,103809024
+All.fromByteString.no padding.6 bytes.littleEndian,828919,15880,3361,0,103809024
+All.fromByteString.no padding.6 bytes.big endian,889589,12482,3526,0,103809024
+All.fromByteString.no padding.7 bytes.littleEndian,949976,6986,3824,0,103809024
+All.fromByteString.no padding.7 bytes.big endian,1035164,14422,3995,0,103809024
+All.fromByteString.no padding.8 bytes.littleEndian,1077941,15146,4318,0,103809024
+All.fromByteString.no padding.8 bytes.big endian,1196181,7414,4470,0,103809024
+All.fromByteString.no padding.16 bytes.littleEndian,2126388,40112,8383,0,103809024
+All.fromByteString.no padding.16 bytes.big endian,2317960,24818,8572,0,103809024
+All.fromByteString.no padding.32 bytes.littleEndian,4447170,74918,16803,1,103809024
+All.fromByteString.no padding.32 bytes.big endian,4904324,37396,17134,1,103809024
+All.fromByteString.no padding.64 bytes.littleEndian,9212377,183708,35309,5,103809024
+All.fromByteString.no padding.64 bytes.big endian,9868027,86020,35584,5,103809024
+All.fromByteString.no padding.128 bytes.littleEndian,19180816,219092,78925,27,103809024
+All.fromByteString.no padding.128 bytes.big endian,19807302,177510,79129,27,103809024
+All.fromByteString.no padding.256 bytes.littleEndian,39408758,560356,189976,165,103809024
+All.fromByteString.no padding.256 bytes.big endian,40900972,158598,190569,169,103809024
+All.fromByteString.no padding.512 bytes.littleEndian,88434297,643272,511103,1393,103809024
+All.fromByteString.no padding.512 bytes.big endian,91661787,866066,509501,1395,103809024
+All.fromByteString.no padding.1024 bytes.littleEndian,233764094,3483488,1600492,15549,103809024
+All.fromByteString.no padding.1024 bytes.big endian,246961215,1152798,1608404,15088,103809024
+All.fromByteString.no padding.2048 bytes.littleEndian,735593640,7292760,5298030,199580,103809024
+All.fromByteString.no padding.2048 bytes.big endian,736048864,13315736,5315573,199963,103809024
+All.fromByteString.no padding.4096 bytes.littleEndian,2925349682,56188240,19002904,1356372,103809024
+All.fromByteString.no padding.4096 bytes.big endian,2915087331,21089086,19005961,1303370,103809024
+All.fromByteString.with padding.1 bytes (0 padding).little endian,249517,3232,1091,0,103809024
+All.fromByteString.with padding.1 bytes (0 padding).big endian,291139,5226,1271,0,103809024
+All.fromByteString.with padding.2 bytes (1 padding).little endian,255142,1498,1109,0,103809024
+All.fromByteString.with padding.2 bytes (1 padding).big endian,295725,4606,1287,0,103809024
+All.fromByteString.with padding.3 bytes (2 padding).little endian,267395,3328,1126,0,103809024
+All.fromByteString.with padding.3 bytes (2 padding).big endian,307315,3466,1306,0,103809024
+All.fromByteString.with padding.4 bytes (3 padding).little endian,275835,3748,1143,0,103809024
+All.fromByteString.with padding.4 bytes (3 padding).big endian,316829,2624,1318,0,103809024
+All.fromByteString.with padding.5 bytes (4 padding).little endian,285514,6908,1158,0,103809024
+All.fromByteString.with padding.5 bytes (4 padding).big endian,330322,6206,1342,0,103809024
+All.fromByteString.with padding.6 bytes (5 padding).little endian,297300,5566,1174,0,103809024
+All.fromByteString.with padding.6 bytes (5 padding).big endian,334853,5996,1337,0,103809024
+All.fromByteString.with padding.7 bytes (6 padding).little endian,298713,4504,1190,0,103809024
+All.fromByteString.with padding.7 bytes (6 padding).big endian,346170,6784,1361,0,103809024
+All.fromByteString.with padding.8 bytes (7 padding).little endian,312728,5398,1171,0,103809024
+All.fromByteString.with padding.8 bytes (7 padding).big endian,361029,7018,1381,0,103809024
+All.fromByteString.with padding.16 bytes (15 padding).little endian,408061,4838,1326,0,103809024
+All.fromByteString.with padding.16 bytes (15 padding).big endian,436576,6608,1518,0,103809024
+All.fromByteString.with padding.32 bytes (31 padding).little endian,564828,5466,1587,0,103809024
+All.fromByteString.with padding.32 bytes (31 padding).big endian,624129,5786,1747,0,103809024
+All.fromByteString.with padding.64 bytes (63 padding).little endian,849884,16252,2040,0,103809024
+All.fromByteString.with padding.64 bytes (63 padding).big endian,970763,3456,2286,0,103809024
+All.fromByteString.with padding.128 bytes (127 padding).little endian,1569278,14522,3125,0,103809024
+All.fromByteString.with padding.128 bytes (127 padding).big endian,1577336,96706,3308,0,103809024
+All.fromByteString.with padding.256 bytes (255 padding).little endian,3002644,37398,5103,0,103809024
+All.fromByteString.with padding.256 bytes (255 padding).big endian,2817323,35636,5210,0,103809024
+All.fromByteString.with padding.512 bytes (511 padding).little endian,5488775,80706,9259,0,103809024
+All.fromByteString.with padding.512 bytes (511 padding).big endian,5372436,34886,9303,0,103809024
+All.fromByteString.with padding.1024 bytes (1023 padding).little endian,9984885,175154,17380,0,103809024
+All.fromByteString.with padding.1024 bytes (1023 padding).big endian,11333368,111254,17386,0,103809024
+All.fromByteString.with padding.2048 bytes (2047 padding).little endian,22291474,41222,33814,1,103809024
+All.fromByteString.with padding.2048 bytes (2047 padding).big endian,20688420,199838,33551,1,103809024
+All.fromByteString.with padding.4096 bytes (4095 padding).little endian,44397298,561704,66286,2,103809024
+All.fromByteString.with padding.4096 bytes (4095 padding).big endian,41963576,551294,65472,2,103809024

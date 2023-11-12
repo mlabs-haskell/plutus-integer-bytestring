@@ -24,9 +24,8 @@ common lang
     -Wall -Wcompat -Wincomplete-record-updates
     -Wincomplete-uni-patterns -Wredundant-constraints
     -Wmissing-export-lists -Wmissing-deriving-strategies
-    -Wredundant-bang-patterns
 
-  build-depends:    base ^>=4.18.1.0
+  build-depends:    base >=4.14.3.0 && <4.18.1.0.0
   default-language: Haskell2010
 
 common test-lang
@@ -49,27 +48,12 @@ common bench-lang
 
 library
   import:          lang
-  exposed-modules:
-    CTConstants
-    Naive
-    Optimized
-
+  exposed-modules: Naive
   build-depends:
-    , bsutils
     , bytestring
-    , ghc-bignum
-    , primitive
+    , bytestring-strict-builder
 
   hs-source-dirs:  src
-
-library bsutils
-  import:          lang
-  exposed-modules: BSUtils
-  include-dirs:    cbits
-  c-sources:       cbits/bsutils.c
-  cc-options:      -Wall -Wextra -Werror -O2
-  build-depends:   bytestring
-  hs-source-dirs:  bsutils
 
 library test-utils
   import:          lang
