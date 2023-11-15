@@ -87,5 +87,8 @@ benchmark naive-bench
   import:         bench-lang
   type:           exitcode-stdio-1.0
   main-is:        Main.hs
-  build-depends:  bytestring
+  build-depends:
+    , bytestring
+    , deepseq
+
   hs-source-dirs: bench/naive
