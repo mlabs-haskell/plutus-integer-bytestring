@@ -88,7 +88,7 @@ import GHC.Real (fromIntegral)
 --
 -- = Properties
 --
--- Throughout, @i@ is not negative, and @k@ is positive.
+-- Throughout, @i@ is not negative.
 --
 -- 1. @fst <$> uncons (toByteString d LittleEndian i)@ @=@ @Just (fromIntegral
 --    $ i `rem` 256)@
