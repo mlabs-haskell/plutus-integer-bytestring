@@ -57,7 +57,7 @@ import GHC.Real (fromIntegral)
 -- digits that would be required to represent \(i\), which is
 --
 -- \[
--- \max(1, \ceil(\log_{256}(i)))
+-- \max(1, \lceil \log_{256}(i) \rceil)
 -- \]
 --
 -- If the desired
