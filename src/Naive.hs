@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -13,13 +12,12 @@ import ByteString.StrictBuilder
     word64BE,
     word8,
   )
-import Control.Category ((.))
 import Data.Bits
   ( unsafeShiftL,
     unsafeShiftR,
     (.|.),
   )
-import Data.Bool (otherwise)
+import Data.Bool (Bool (False, True), otherwise)
 import Data.ByteString
   ( ByteString,
     findIndex,
@@ -35,7 +33,7 @@ import Data.Int (Int)
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.Monoid (mempty, (<>))
 import Data.Ord (max, (<), (<=), (>), (>=))
-import Data.Word (Word64, Word8)
+import Data.Word (Word64)
 import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Err (error)
 import GHC.Num
@@ -46,6 +44,7 @@ import GHC.Num
     (-),
   )
 import GHC.Real (fromIntegral)
+import Text.Show (show)
 
 -- | Given a desired byte length and a desired byte order (see below), as
 -- well as a non-negative integer, constructs its byte-based representation.
@@ -61,9 +60,7 @@ import GHC.Real (fromIntegral)
 -- \]
 --
 -- If the desired
--- byte length is larger than this, the number will be padded (see below); if
--- the desired byte length is smaller, the minimum byte length will be used
--- instead.
+-- byte length is larger than this, the number will be padded (see below).
 --
 -- If a little-endian byte order is requested, the bytes are laid out in
 -- ascending order of place value: the first byte is the least-significant
@@ -84,72 +81,128 @@ import GHC.Real (fromIntegral)
 --
 -- = Important note
 --
--- Negative `Integer`s cannot be converted and will fail.
+-- Negative 'Integer's cannot be converted and will fail.
+--
+-- When the length argument is @0@, we assume that the user wants the
+-- minimum-sized representation of the input 'Integer' (that is, no specific
+-- size requirements). If the length argument is positive, we instead assume
+-- that this is a hard requirement: if we would require more digits than this,
+-- we error, and if we would require fewer, we pad.
 --
 -- = Properties
 --
 -- Throughout, @i@ is not negative.
 --
--- 1. @fst <$> uncons (toByteString d LittleEndian i)@ @=@ @Just (fromIntegral
+-- 1. @fst <$> uncons (toByteString 0 LittleEndian i)@ @=@ @Just (fromIntegral
 --    $ i `rem` 256)@
 -- 2. @toByteString d LittleEndian (fromIntegral w8)@ @=@ @cons w8 (replicate
 --    (max 0 (d - 1) 0))@
--- 3. @toByteString d LittleEndian i@ @=@ @reverse (toByteString d BigEndian i)@
+-- 3. @toByteString 0 LittleEndian i@ @=@ @reverse (toByteString 0 BigEndian i)@
 --
 -- Properties 1 and 3 together imply the following:
 --
--- - @snd <$> unsnoc (toByteString d BigEndian i)@ @=@ @Just (fromIntegral
+-- - @snd <$> unsnoc (toByteString 0 BigEndian i)@ @=@ @Just (fromIntegral
 --   $ i `rem` 256)@
 toByteString :: Int -> ByteOrder -> Integer -> ByteString
 toByteString requestedLength requestedByteOrder i = case signum i of
   (-1) -> error "toByteString: negative Integers cannot be converted"
   0 -> replicate (max 1 requestedLength) 0x0
-  _ -> builderBytes . go mempty $ i
+  _ -> builderBytes $ case (requestedByteOrder, requestedLength > 0) of
+    (LittleEndian, True) -> goLELimit mempty i
+    (LittleEndian, False) -> goLENoLimit mempty i
+    (BigEndian, True) -> goBELimit mempty i
+    (BigEndian, False) -> goBENoLimit mempty i
   where
     -- To improve performance, we extract 8 digits at a time with each 'step' of
     -- the loop. As each 'digit extraction' is a linear-time operation on an
     -- Integer, by doing this, we improve performance by a factor of (roughly)
     -- 8.
-    go :: Builder -> Integer -> Builder
-    go acc remaining
-      | remaining == 0 = padAtEnd acc
+    goLELimit :: Builder -> Integer -> Builder
+    goLELimit acc remaining
+      | remaining == 0 = padLE acc
+      | builderLength acc >= requestedLength = errorOut
       | otherwise =
-          let -- Equivalent to remaining `quotRem` (2 ^ 64), but much faster.
-              newRemaining = remaining `unsafeShiftR` 64
+          -- The same as x `quotRem` 256^8, but much faster.
+          let newRemaining = remaining `unsafeShiftR` 64
               digitGroup = fromInteger remaining
            in case newRemaining of
-                0 -> finish acc digitGroup
-                _ -> go (mkNewAcc64 acc digitGroup) newRemaining
-    -- We write this function (and other helpers) in this somewhat convoluted
-    -- way to avoid re-scrutinizing requestedByteOrder: if we wrote it the more
-    -- sensible way (involving a case statement), we would be introducing a
-    -- branch for every time that function would be called. Using this method,
-    -- we branch only once (right at the start of the toByteString call).
-    padAtEnd :: Builder -> Builder
-    !padAtEnd = case requestedByteOrder of
-      BigEndian -> \acc ->
-        bytes (replicate (requestedLength - builderLength acc) 0x0) <> acc
-      LittleEndian -> \acc ->
-        acc <> bytes (replicate (requestedLength - builderLength acc) 0x0)
-    mkNewAcc64 :: Builder -> Word64 -> Builder
-    !mkNewAcc64 = case requestedByteOrder of
-      BigEndian -> \acc w64 -> word64BE w64 <> acc
-      LittleEndian -> \acc w64 -> acc <> storable w64
+                0 -> finishLELimit acc digitGroup
+                _ -> goLELimit (acc <> storable digitGroup) newRemaining
+    goBELimit :: Builder -> Integer -> Builder
+    goBELimit acc remaining
+      | remaining == 0 = padBE acc
+      | builderLength acc >= requestedLength = errorOut
+      | otherwise =
+          let newRemaining = remaining `unsafeShiftR` 64
+              digitGroup = fromInteger remaining
+           in case newRemaining of
+                0 -> finishBELimit acc digitGroup
+                _ -> goBELimit (word64BE digitGroup <> acc) newRemaining
+    goLENoLimit :: Builder -> Integer -> Builder
+    goLENoLimit acc remaining
+      | remaining == 0 = padLE acc
+      | otherwise =
+          let newRemaining = remaining `unsafeShiftR` 64
+              digitGroup = fromInteger remaining
+           in case newRemaining of
+                0 -> finishLENoLimit acc digitGroup
+                _ -> goLENoLimit (acc <> storable digitGroup) newRemaining
+    goBENoLimit :: Builder -> Integer -> Builder
+    goBENoLimit acc remaining
+      | remaining == 0 = padBE acc
+      | otherwise =
+          let newRemaining = remaining `unsafeShiftR` 64
+              digitGroup = fromInteger remaining
+           in case newRemaining of
+                0 -> finishBENoLimit acc digitGroup
+                _ -> goBENoLimit (word64BE digitGroup <> acc) newRemaining
     -- When we have 7 or fewer digits remaining, we revert to extracting one
     -- digit at a time. Because a Word64 will fit such a number, and Word64 has
     -- constant-time operations over it, we switch to a Word64 instead of an
     -- Integer for this stage.
-    finish :: Builder -> Word64 -> Builder
-    finish acc remaining
-      | remaining == 0 = padAtEnd acc
+    finishLELimit :: Builder -> Word64 -> Builder
+    finishLELimit acc remaining
+      | remaining == 0 = padLE acc
+      | builderLength acc > requestedLength = errorOut
+      | otherwise =
+          -- The same as w64 `quotRem` 256, but much faster.
+          let newRemaining = remaining `unsafeShiftR` 8
+              digit = fromIntegral remaining
+           in finishLELimit (acc <> word8 digit) newRemaining
+    finishLENoLimit :: Builder -> Word64 -> Builder
+    finishLENoLimit acc remaining
+      | remaining == 0 = padLE acc
       | otherwise =
           let newRemaining = remaining `unsafeShiftR` 8
               digit = fromIntegral remaining
-           in finish (mkNewAcc8 acc digit) newRemaining
-    mkNewAcc8 :: Builder -> Word8 -> Builder
-    !mkNewAcc8 = case requestedByteOrder of
-      BigEndian -> \acc w8 -> word8 w8 <> acc
-      LittleEndian -> \acc w8 -> acc <> word8 w8
+           in finishLENoLimit (acc <> word8 digit) newRemaining
+    finishBELimit :: Builder -> Word64 -> Builder
+    finishBELimit acc remaining
+      | remaining == 0 = padBE acc
+      | builderLength acc > requestedLength = errorOut
+      | otherwise =
+          let newRemaining = remaining `unsafeShiftR` 8
+              digit = fromIntegral remaining
+           in finishBELimit (word8 digit <> acc) newRemaining
+    finishBENoLimit :: Builder -> Word64 -> Builder
+    finishBENoLimit acc remaining
+      | remaining == 0 = padBE acc
+      | otherwise =
+          let newRemaining = remaining `unsafeShiftR` 8
+              digit = fromIntegral remaining
+           in finishBENoLimit (word8 digit <> acc) newRemaining
+    errorOut :: Builder
+    errorOut =
+      error $
+        "toByteString: cannot represent "
+          <> show i
+          <> " using "
+          <> show requestedLength
+          <> " bytes"
+    padLE :: Builder -> Builder
+    padLE acc = acc <> bytes (replicate (requestedLength - builderLength acc) 0x0)
+    padBE :: Builder -> Builder
+    padBE acc = bytes (replicate (requestedLength - builderLength acc) 0x0) <> acc
 
 -- | Given a byte order for the representation (as per the Representation
 -- section of the 'toByteString' documentation) and a 'ByteString'
@@ -190,7 +243,7 @@ toByteString requestedLength requestedByteOrder i = case signum i of
 -- 1. @fromByteString BigEndian (replicate n b)@ @=@ @fromByteString
 --    LittleEndian (replicate n b)@
 -- 2. @fromByteString sbo (singleton w8)@ @=@ @fromIntegral w8@
--- 3. @fromByteString bo (toByteString k bo i)@ @=@ @i@
+-- 3. @fromByteString bo (toByteString 0 bo i)@ @=@ @i@
 -- 4. @fromByteString LittleEndian (bs <> replicate n 0)@ @=@ @fromByteString
 --    LittleEndian bs@
 --

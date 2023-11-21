@@ -76,10 +76,10 @@ main =
 -- Properties
 
 toByteStringProp1 :: TestTree
-toByteStringProp1 = testProperty propName . property $ \d i ->
+toByteStringProp1 = testProperty propName . property $ \i ->
   let i' = toInteger i
       expected = Just (fromIntegral $ i' `rem` 256)
-      converted = toByteString d LittleEndian i'
+      converted = toByteString 0 LittleEndian i'
       actual = fst <$> uncons converted
    in counterexample ("Converted ByteString: " <> hexByteString converted)
         . classifyTBSCodePath (countBytes i')
@@ -87,7 +87,7 @@ toByteStringProp1 = testProperty propName . property $ \d i ->
   where
     propName :: TestName
     propName =
-      "fst <$> uncons (toByteString d LittleEndian i)"
+      "fst <$> uncons (toByteString 0 LittleEndian i)"
         <> " = "
         <> "Just (fromIntegral $ i `rem` 256)"
 
@@ -105,17 +105,17 @@ toByteStringProp2 = testProperty propName . property $ \d w8 ->
         <> "cons w8 (replicate (max 0 (d - 1)) 0)"
 
 toByteStringProp3 :: TestTree
-toByteStringProp3 = testProperty propName . property $ \d i ->
+toByteStringProp3 = testProperty propName . property $ \i ->
   let i' = toInteger i
-      expected = reverse (toByteString d BigEndian i')
-      actual = toByteString d LittleEndian i'
+      expected = reverse (toByteString 0 BigEndian i')
+      actual = toByteString 0 LittleEndian i'
    in classifyTBSCodePath (countBytes i') $ expected === actual
   where
     propName :: TestName
     propName =
-      "toByteString d LittleEndian i"
+      "toByteString 0 LittleEndian i"
         <> " = "
-        <> "reverse (toByteString d BigEndian i)"
+        <> "reverse (toByteString 0 BigEndian i)"
 
 fromByteStringProp1 :: TestTree
 fromByteStringProp1 = testProperty propName . property $ \(Positive n) w8 ->
@@ -145,15 +145,15 @@ fromByteStringProp2 = testProperty propName . property $ \w8 ->
         <> "fromIntegral w8"
 
 fromByteStringProp3 :: TestTree
-fromByteStringProp3 = testProperty propName . property $ \i k ->
+fromByteStringProp3 = testProperty propName . property $ \i ->
   let i' = toInteger i
-      actualLE = fromByteString LittleEndian (toByteString k LittleEndian i')
-      actualBE = fromByteString BigEndian (toByteString k BigEndian i')
+      actualLE = fromByteString LittleEndian (toByteString 0 LittleEndian i')
+      actualBE = fromByteString BigEndian (toByteString 0 BigEndian i')
    in classifyTBSCodePath (countBytes i') $ (i' === actualLE) .&. (i' === actualBE)
   where
     propName :: TestName
     propName =
-      "fromByteString bo (toByteString k bo i)"
+      "fromByteString bo (toByteString 0 bo i)"
         <> " = "
         <> "i"
 
