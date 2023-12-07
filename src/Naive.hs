@@ -171,7 +171,7 @@ toByteString requestedLength requestedByteOrder i = case signum i of
            in finishLELimit (acc <> word8 digit) newRemaining
     finishLENoLimit :: Builder -> Word64 -> Builder
     finishLENoLimit acc remaining
-      | remaining == 0 = padLE acc
+      | remaining == 0 = acc
       | otherwise =
           let newRemaining = remaining `unsafeShiftR` 8
               digit = fromIntegral remaining
@@ -186,7 +186,7 @@ toByteString requestedLength requestedByteOrder i = case signum i of
            in finishBELimit (word8 digit <> acc) newRemaining
     finishBENoLimit :: Builder -> Word64 -> Builder
     finishBENoLimit acc remaining
-      | remaining == 0 = padBE acc
+      | remaining == 0 = acc
       | otherwise =
           let newRemaining = remaining `unsafeShiftR` 8
               digit = fromIntegral remaining

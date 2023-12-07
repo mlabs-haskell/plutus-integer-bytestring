@@ -7,6 +7,7 @@ module Main (main) where
 import Control.Category ((.))
 import Data.ByteString
   ( cons,
+    length,
     replicate,
     reverse,
     singleton,
@@ -62,7 +63,8 @@ main =
         [ fromByteStringProp1,
           fromByteStringProp2,
           fromByteStringProp3,
-          fromByteStringProp4
+          fromByteStringProp4,
+          fromByteStringProp5
         ]
     ]
   where
@@ -169,6 +171,16 @@ fromByteStringProp4 = testProperty propName . property $ \neBS (Positive n) ->
       "fromByteString LittleEndian (bs <> replicate n 0)"
         <> " = "
         <> "fromByteString LittleEndian bs"
+
+fromByteStringProp5 :: TestTree
+fromByteStringProp5 = testProperty propName . property $ \neBS ->
+  let bs = NEBS.toByteString neBS
+      actualLE = toByteString (length bs) LittleEndian (fromByteString LittleEndian bs)
+      actualBE = toByteString (length bs) BigEndian (fromByteString BigEndian bs)
+   in (bs === actualLE) .&. (bs == actualBE)
+  where
+    propName :: TestName
+    propName = "toByteString (length bs) bo (fromByteString bo bs) = bs"
 
 -- Helpers
 
