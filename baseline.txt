@@ -1,0 +1,144 @@
+  fromByteString
+    no padding
+      little endian
+        1 bytes:                   OK
+          17.6 ns ± 294 ps,  95 B  allocated,   0 B  copied,  99 MB peak memory,  3% less than baseline
+        2 bytes:                   OK
+          37.3 ns ± 504 ps, 215 B  allocated,   0 B  copied,  99 MB peak memory, 11% less than baseline
+        3 bytes:                   OK
+          60.5 ns ± 706 ps, 335 B  allocated,   0 B  copied,  99 MB peak memory,  3% less than baseline
+        4 bytes:                   OK
+          81.3 ns ± 4.4 ns, 455 B  allocated,   0 B  copied,  99 MB peak memory,  5% less than baseline
+        5 bytes:                   OK
+          105  ns ± 858 ps, 575 B  allocated,   0 B  copied,  99 MB peak memory,  8% less than baseline
+        6 bytes:                   OK
+          128  ns ± 1.6 ns, 695 B  allocated,   0 B  copied,  99 MB peak memory,  6% less than baseline
+        7 bytes:                   OK
+          151  ns ± 2.0 ns, 815 B  allocated,   0 B  copied,  99 MB peak memory,  9% less than baseline
+        8 bytes:                   OK
+          20.9 ns ± 510 ps, 119 B  allocated,   0 B  copied,  99 MB peak memory, 12% less than baseline
+        16 bytes:                  OK
+          61.0 ns ±  48 ps, 279 B  allocated,   0 B  copied,  99 MB peak memory,  5% less than baseline
+        32 bytes:                  OK
+          130  ns ± 860 ps, 646 B  allocated,   0 B  copied,  99 MB peak memory,  7% less than baseline
+        64 bytes:                  OK
+          280  ns ± 4.6 ns, 1.5 KB allocated,   0 B  copied,  99 MB peak memory,  2% less than baseline
+        128 bytes:                 OK
+          620  ns ±  11 ns, 4.1 KB allocated,   0 B  copied,  99 MB peak memory,       same as baseline
+        256 bytes:                 OK
+          1.34 μs ±  24 ns,  12 KB allocated,   0 B  copied,  99 MB peak memory,  3% less than baseline
+        512 bytes:                 OK
+          3.22 μs ±  63 ns,  40 KB allocated,   2 B  copied,  99 MB peak memory,  5% less than baseline
+        1024 bytes:                OK
+          10.6 μs ± 760 ns, 145 KB allocated,  12 B  copied,  99 MB peak memory,       same as baseline
+        2048 bytes:                OK
+          35.6 μs ± 539 ns, 545 KB allocated,  83 B  copied,  99 MB peak memory,  6% less than baseline
+        4096 bytes:                OK
+          198  μs ± 3.2 μs, 2.1 MB allocated, 309 B  copied,  99 MB peak memory,       same as baseline
+      big endian
+        1 bytes:                   OK
+          13.6 ns ± 384 ps,  79 B  allocated,   0 B  copied,  99 MB peak memory, 23% less than baseline
+        2 bytes:                   OK
+          38.9 ns ± 108 ps, 199 B  allocated,   0 B  copied,  99 MB peak memory,  5% less than baseline
+        3 bytes:                   OK
+          59.5 ns ± 920 ps, 319 B  allocated,   0 B  copied,  99 MB peak memory, 10% less than baseline
+        4 bytes:                   OK
+          85.6 ns ± 1.0 ns, 438 B  allocated,   0 B  copied,  99 MB peak memory,  3% less than baseline
+        5 bytes:                   OK
+          108  ns ± 3.0 ns, 559 B  allocated,   0 B  copied,  99 MB peak memory,  7% less than baseline
+        6 bytes:                   OK
+          128  ns ± 2.2 ns, 674 B  allocated,   0 B  copied,  99 MB peak memory,  8% less than baseline
+        7 bytes:                   OK
+          147  ns ± 1.1 ns, 798 B  allocated,   0 B  copied,  99 MB peak memory, 10% less than baseline
+        8 bytes:                   OK
+          21.7 ns ± 232 ps, 103 B  allocated,   0 B  copied,  99 MB peak memory,  7% less than baseline
+        16 bytes:                  OK
+          55.6 ns ± 2.4 ns, 263 B  allocated,   0 B  copied,  99 MB peak memory,  6% less than baseline
+        32 bytes:                  OK
+          129  ns ± 1.6 ns, 628 B  allocated,   0 B  copied,  99 MB peak memory,  2% less than baseline
+        64 bytes:                  OK
+          281  ns ± 3.3 ns, 1.5 KB allocated,   0 B  copied,  99 MB peak memory,  4% more than baseline
+        128 bytes:                 OK
+          608  ns ±  10 ns, 4.1 KB allocated,   0 B  copied,  99 MB peak memory,       same as baseline
+        256 bytes:                 OK
+          1.34 μs ±  20 ns,  12 KB allocated,   0 B  copied,  99 MB peak memory,  5% less than baseline
+        512 bytes:                 OK
+          3.33 μs ±  44 ns,  40 KB allocated,   2 B  copied,  99 MB peak memory,  4% less than baseline
+        1024 bytes:                OK
+          10.3 μs ± 596 ns, 145 KB allocated,  10 B  copied,  99 MB peak memory,       same as baseline
+        2048 bytes:                OK
+          34.0 μs ± 544 ns, 545 KB allocated,  83 B  copied,  99 MB peak memory, 10% less than baseline
+        4096 bytes:                OK
+          195  μs ± 1.1 μs, 2.1 MB allocated, 316 B  copied,  99 MB peak memory,       same as baseline
+    with padding
+      little endian
+        1 bytes (0 padding):       OK
+          17.7 ns ± 314 ps,  95 B  allocated,   0 B  copied,  99 MB peak memory,  9% more than baseline
+        2 bytes (1 padding):       OK
+          18.0 ns ±  38 ps, 111 B  allocated,   0 B  copied,  99 MB peak memory,  3% more than baseline
+        3 bytes (2 padding):       OK
+          19.3 ns ± 384 ps, 127 B  allocated,   0 B  copied,  99 MB peak memory,  7% less than baseline
+        4 bytes (3 padding):       OK
+          19.4 ns ± 934 ps, 143 B  allocated,   0 B  copied,  99 MB peak memory, 10% less than baseline
+        5 bytes (4 padding):       OK
+          19.6 ns ± 1.5 ns, 159 B  allocated,   0 B  copied,  99 MB peak memory, 18% less than baseline
+        6 bytes (5 padding):       OK
+          21.3 ns ± 296 ps, 175 B  allocated,   0 B  copied,  99 MB peak memory, 12% less than baseline
+        7 bytes (6 padding):       OK
+          22.8 ns ± 410 ps, 191 B  allocated,   0 B  copied,  99 MB peak memory,  5% less than baseline
+        8 bytes (7 padding):       OK
+          23.5 ns ±  90 ps, 207 B  allocated,   0 B  copied,  99 MB peak memory, 10% less than baseline
+        16 bytes (15 padding):     OK
+          32.6 ns ± 556 ps, 335 B  allocated,   0 B  copied,  99 MB peak memory, 15% less than baseline
+        32 bytes (31 padding):     OK
+          52.2 ns ± 1.0 ns, 591 B  allocated,   0 B  copied,  99 MB peak memory, 16% less than baseline
+        64 bytes (63 padding):     OK
+          97.8 ns ± 554 ps, 1.1 KB allocated,   0 B  copied,  99 MB peak memory, 12% less than baseline
+        128 bytes (127 padding):   OK
+          174  ns ± 880 ps, 2.1 KB allocated,   0 B  copied,  99 MB peak memory, 15% less than baseline
+        256 bytes (255 padding):   OK
+          329  ns ± 6.1 ns, 4.1 KB allocated,   0 B  copied,  99 MB peak memory, 14% less than baseline
+        512 bytes (511 padding):   OK
+          633  ns ± 4.6 ns, 8.1 KB allocated,   0 B  copied,  99 MB peak memory, 14% less than baseline
+        1024 bytes (1023 padding): OK
+          1.25 μs ±  20 ns,  16 KB allocated,   0 B  copied,  99 MB peak memory, 14% less than baseline
+        2048 bytes (2047 padding): OK
+          2.48 μs ±  38 ns,  32 KB allocated,   1 B  copied,  99 MB peak memory, 16% less than baseline
+        4096 bytes (4095 padding): OK
+          4.97 μs ±  30 ns,  64 KB allocated,   2 B  copied,  99 MB peak memory, 15% less than baseline
+      big endian
+        1 bytes (0 padding):       OK
+          14.0 ns ± 670 ps,  79 B  allocated,   0 B  copied,  99 MB peak memory, 23% less than baseline
+        2 bytes (1 padding):       OK
+          18.0 ns ± 204 ps,  95 B  allocated,   0 B  copied,  99 MB peak memory,  9% less than baseline
+        3 bytes (2 padding):       OK
+          16.1 ns ± 410 ps, 111 B  allocated,   0 B  copied,  99 MB peak memory, 10% less than baseline
+        4 bytes (3 padding):       OK
+          19.6 ns ± 222 ps, 127 B  allocated,   0 B  copied,  99 MB peak memory,       same as baseline
+        5 bytes (4 padding):       OK
+          20.0 ns ± 594 ps, 143 B  allocated,   0 B  copied,  99 MB peak memory,  5% less than baseline
+        6 bytes (5 padding):       OK
+          22.0 ns ± 142 ps, 159 B  allocated,   0 B  copied,  99 MB peak memory,  1% less than baseline
+        7 bytes (6 padding):       OK
+          21.7 ns ± 172 ps, 175 B  allocated,   0 B  copied,  99 MB peak memory, 12% less than baseline
+        8 bytes (7 padding):       OK
+          24.1 ns ± 340 ps, 191 B  allocated,   0 B  copied,  99 MB peak memory,  1% less than baseline
+        16 bytes (15 padding):     OK
+          31.4 ns ± 400 ps, 319 B  allocated,   0 B  copied,  99 MB peak memory, 14% less than baseline
+        32 bytes (31 padding):     OK
+          51.1 ns ± 332 ps, 575 B  allocated,   0 B  copied,  99 MB peak memory, 12% less than baseline
+        64 bytes (63 padding):     OK
+          97.4 ns ± 776 ps, 1.1 KB allocated,   0 B  copied,  99 MB peak memory,  7% less than baseline
+        128 bytes (127 padding):   OK
+          167  ns ± 938 ps, 2.1 KB allocated,   0 B  copied,  99 MB peak memory, 12% less than baseline
+        256 bytes (255 padding):   OK
+          317  ns ± 3.4 ns, 4.1 KB allocated,   0 B  copied,  99 MB peak memory, 15% less than baseline
+        512 bytes (511 padding):   OK
+          616  ns ± 8.7 ns, 8.1 KB allocated,   0 B  copied,  99 MB peak memory, 13% less than baseline
+        1024 bytes (1023 padding): OK
+          1.25 μs ±  25 ns,  16 KB allocated,   0 B  copied,  99 MB peak memory,  9% less than baseline
+        2048 bytes (2047 padding): OK
+          2.32 μs ±  35 ns,  32 KB allocated,   1 B  copied,  99 MB peak memory, 15% less than baseline
+        4096 bytes (4095 padding): OK
+          4.59 μs ±  83 ns,  64 KB allocated,   2 B  copied,  99 MB peak memory, 15% less than baseline
+

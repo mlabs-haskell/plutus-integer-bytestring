@@ -274,13 +274,16 @@ fromByteString statedByteOrder bs
           let digitGroup = read64LE ix
               newShift = shift + 64
               newIx = ix + 8
-           in if digitGroup == 0
-                then goLE acc limit newShift newIx
-                else -- The accumulator modifier is the same as 'fromIntegral
-                -- digitGroup * 2 ^ shift', but much faster. We use this in
-                -- several functions: unfortunately, GHC doesn't optimize this
-                -- case for Integers (or, seemingly, in general).
-                  goLE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
+           in goLE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
+      {-
+                 in if digitGroup == 0
+                      then goLE acc limit newShift newIx
+                      else -- The accumulator modifier is the same as 'fromIntegral
+                      -- digitGroup * 2 ^ shift', but much faster. We use this in
+                      -- several functions: unfortunately, GHC doesn't optimize this
+                      -- case for Integers (or, seemingly, in general).
+                        goLE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
+      -}
       | otherwise = finishLE acc limit shift ix
     goBE :: Integer -> Int -> Int -> Int -> Integer
     goBE acc limit shift ix
@@ -288,9 +291,12 @@ fromByteString statedByteOrder bs
           let digitGroup = read64BE ix
               newShift = shift + 64
               newIx = ix - 8
-           in if digitGroup == 0
-                then goBE acc limit newShift newIx
-                else goBE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
+           in goBE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
+      {-
+       in if digitGroup == 0
+            then goBE acc limit newShift newIx
+            else goBE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
+      -}
       | otherwise = finishBE acc limit shift ix
     -- Once we have fewer than 8 digits to process, we slow down and do them one
     -- at a time.
@@ -301,9 +307,12 @@ fromByteString statedByteOrder bs
           let digit = index bs ix
               newShift = shift + 8
               newIx = ix + 1
-           in if digit == 0
-                then finishLE acc limit newShift newIx
-                else finishLE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+           in finishLE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+    {-
+     in if digit == 0
+          then finishLE acc limit newShift newIx
+          else finishLE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+    -}
     finishBE :: Integer -> Int -> Int -> Int -> Integer
     finishBE acc limit shift ix
       | ix < limit = acc
@@ -311,9 +320,12 @@ fromByteString statedByteOrder bs
           let digit = index bs ix
               newShift = shift + 8
               newIx = ix - 1
-           in if digit == 0
-                then finishBE acc limit newShift newIx
-                else finishBE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+           in finishBE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+    {-
+    in if digit == 0
+         then finishBE acc limit newShift newIx
+         else finishBE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+       -}
     -- Technically, ByteStrings don't (safely) permit reads larger than one
     -- byte. Thus, we use the workaround here, where we construct a Word64 from
     -- pieces.

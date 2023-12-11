@@ -1,0 +1,27 @@
+Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+All.zeroes.little endian.3 bytes (1 significant zeroes),46150,464,255,0,36700160
+All.zeroes.little endian.4 bytes (2 significant zeroes),49649,648,295,0,36700160
+All.zeroes.little endian.5 bytes (3 significant zeroes),54689,934,334,0,36700160
+All.zeroes.little endian.6 bytes (4 significant zeroes),56198,2684,375,0,36700160
+All.zeroes.little endian.7 bytes (5 significant zeroes),60175,994,414,0,36700160
+All.zeroes.little endian.32 bytes (30 significant zeroes),65194,674,366,0,36700160
+All.zeroes.little endian.64 bytes (62 significant zeroes),100542,778,591,0,36700160
+All.zeroes.little endian.128 bytes (126 significant zeroes),164934,3170,1026,0,36700160
+All.zeroes.little endian.256 bytes (254 significant zeroes),298318,4776,1934,0,36700160
+All.zeroes.little endian.512 bytes (510 significant zeroes),587263,5700,3723,0,36700160
+All.zeroes.little endian.1024 bytes (1022 significant zeroes),1109872,19114,7277,0,36700160
+All.zeroes.little endian.2048 bytes (2046 significant zeroes),2214762,19636,14402,0,36700160
+All.zeroes.little endian.4096 bytes (4094 significant zeroes),4972073,28140,28773,1,62914560
+All.zeroes.big endian.3 bytes (1 significant zeroes),45565,840,239,0,62914560
+All.zeroes.big endian.4 bytes (2 significant zeroes),47527,880,279,0,62914560
+All.zeroes.big endian.5 bytes (3 significant zeroes),52599,680,318,0,62914560
+All.zeroes.big endian.6 bytes (4 significant zeroes),57292,958,358,0,62914560
+All.zeroes.big endian.7 bytes (5 significant zeroes),64213,886,399,0,62914560
+All.zeroes.big endian.32 bytes (30 significant zeroes),67632,200,351,0,62914560
+All.zeroes.big endian.64 bytes (62 significant zeroes),100060,860,574,0,62914560
+All.zeroes.big endian.128 bytes (126 significant zeroes),167757,1460,1019,0,62914560
+All.zeroes.big endian.256 bytes (254 significant zeroes),312074,4968,1911,0,62914560
+All.zeroes.big endian.512 bytes (510 significant zeroes),576109,8966,3686,0,62914560
+All.zeroes.big endian.1024 bytes (1022 significant zeroes),1133987,12582,7285,0,62914560
+All.zeroes.big endian.2048 bytes (2046 significant zeroes),2206459,35230,14439,0,62914560
+All.zeroes.big endian.4096 bytes (4094 significant zeroes),5000000,60990,28722,1,62914560

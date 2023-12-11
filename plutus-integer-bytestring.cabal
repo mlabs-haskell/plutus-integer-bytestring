@@ -92,3 +92,13 @@ benchmark naive-bench
     , deepseq
 
   hs-source-dirs: bench/naive
+
+benchmark zeroes-bench
+  import:         bench-lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  build-depends:
+    , bytestring
+    , deepseq
+
+  hs-source-dirs: bench/zeroes

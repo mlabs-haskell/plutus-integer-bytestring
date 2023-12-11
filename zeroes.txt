@@ -1,0 +1,57 @@
+All
+  zeroes
+    little endian
+      3 bytes (1 significant zeroes):       OK
+        47.5 ns ± 734 ps, 247 B  allocated,   0 B  copied,  35 MB peak memory,  3% more than baseline
+      4 bytes (2 significant zeroes):       OK
+        52.1 ns ± 364 ps, 279 B  allocated,   0 B  copied,  35 MB peak memory,  4% more than baseline
+      5 bytes (3 significant zeroes):       OK
+        56.7 ns ± 550 ps, 311 B  allocated,   0 B  copied,  35 MB peak memory,  3% more than baseline
+      6 bytes (4 significant zeroes):       OK
+        64.1 ns ± 274 ps, 343 B  allocated,   0 B  copied,  35 MB peak memory, 14% more than baseline
+      7 bytes (5 significant zeroes):       OK
+        74.2 ns ± 1.1 ns, 375 B  allocated,   0 B  copied,  35 MB peak memory, 23% more than baseline
+      32 bytes (30 significant zeroes):     OK
+        73.1 ns ± 842 ps, 350 B  allocated,   0 B  copied,  35 MB peak memory, 12% more than baseline
+      64 bytes (62 significant zeroes):     OK
+        112  ns ± 936 ps, 539 B  allocated,   0 B  copied,  35 MB peak memory, 11% more than baseline
+      128 bytes (126 significant zeroes):   OK
+        192  ns ± 2.4 ns, 924 B  allocated,   0 B  copied,  35 MB peak memory, 16% more than baseline
+      256 bytes (254 significant zeroes):   OK
+        351  ns ± 2.1 ns, 1.7 KB allocated,   0 B  copied,  35 MB peak memory, 17% more than baseline
+      512 bytes (510 significant zeroes):   OK
+        677  ns ±  12 ns, 3.1 KB allocated,   0 B  copied,  35 MB peak memory, 15% more than baseline
+      1024 bytes (1022 significant zeroes): OK
+        1.36 μs ±  23 ns, 6.1 KB allocated,   0 B  copied,  35 MB peak memory, 22% more than baseline
+      2048 bytes (2046 significant zeroes): OK
+        2.71 μs ±  13 ns,  12 KB allocated,   0 B  copied,  35 MB peak memory, 22% more than baseline
+      4096 bytes (4094 significant zeroes): OK
+        5.88 μs ±  91 ns,  24 KB allocated,   0 B  copied,  66 MB peak memory, 18% more than baseline
+    big endian
+      3 bytes (1 significant zeroes):       OK
+        48.3 ns ± 932 ps, 231 B  allocated,   0 B  copied,  66 MB peak memory,  5% more than baseline
+      4 bytes (2 significant zeroes):       OK
+        49.7 ns ± 258 ps, 263 B  allocated,   0 B  copied,  66 MB peak memory,  4% more than baseline
+      5 bytes (3 significant zeroes):       OK
+        60.8 ns ± 790 ps, 295 B  allocated,   0 B  copied,  66 MB peak memory, 15% more than baseline
+      6 bytes (4 significant zeroes):       OK
+        63.8 ns ±  22 ps, 327 B  allocated,   0 B  copied,  66 MB peak memory, 11% more than baseline
+      7 bytes (5 significant zeroes):       OK
+        71.9 ns ±  48 ps, 359 B  allocated,   0 B  copied,  66 MB peak memory, 11% more than baseline
+      32 bytes (30 significant zeroes):     OK
+        71.6 ns ± 1.2 ns, 334 B  allocated,   0 B  copied,  66 MB peak memory,  5% more than baseline
+      64 bytes (62 significant zeroes):     OK
+        107  ns ± 1.6 ns, 523 B  allocated,   0 B  copied,  66 MB peak memory,  7% more than baseline
+      128 bytes (126 significant zeroes):   OK
+        189  ns ± 3.6 ns, 908 B  allocated,   0 B  copied,  66 MB peak memory, 12% more than baseline
+      256 bytes (254 significant zeroes):   OK
+        329  ns ± 3.9 ns, 1.6 KB allocated,   0 B  copied,  66 MB peak memory,  5% more than baseline
+      512 bytes (510 significant zeroes):   OK
+        597  ns ±  11 ns, 3.1 KB allocated,   0 B  copied,  66 MB peak memory,  3% more than baseline
+      1024 bytes (1022 significant zeroes): OK
+        1.28 μs ± 1.4 ns, 6.1 KB allocated,   0 B  copied,  66 MB peak memory, 12% more than baseline
+      2048 bytes (2046 significant zeroes): OK
+        2.65 μs ± 1.7 ns,  12 KB allocated,   0 B  copied,  66 MB peak memory, 20% more than baseline
+      4096 bytes (4094 significant zeroes): OK
+        5.55 μs ±  35 ns,  24 KB allocated,   0 B  copied,  66 MB peak memory, 11% more than baseline
+
