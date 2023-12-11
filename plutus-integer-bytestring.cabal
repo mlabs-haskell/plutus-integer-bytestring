@@ -48,8 +48,12 @@ common bench-lang
 
 library
   import:          lang
-  exposed-modules: Naive
+  exposed-modules:
+    Naive
+    WithBinary
+
   build-depends:
+    , binary
     , bytestring
     , bytestring-strict-builder
 
@@ -80,6 +84,16 @@ test-suite naive-tests
     , plutus-integer-bytestring
 
   hs-source-dirs: test/naive
+
+test-suite binary-tests
+  import:         test-lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  build-depends:
+    , bytestring
+    , plutus-integer-bytestring
+
+  hs-source-dirs: test/binary
 
 -- Benchmarks
 
