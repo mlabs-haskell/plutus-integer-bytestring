@@ -140,7 +140,7 @@ toByteString requestedLength requestedByteOrder i = case signum i of
                 _ -> goBELimit (word64BE digitGroup <> acc) newRemaining
     goLENoLimit :: Builder -> Integer -> Builder
     goLENoLimit acc remaining
-      | remaining == 0 = padLE acc
+      | remaining == 0 = acc
       | otherwise =
           let newRemaining = remaining `unsafeShiftR` 64
               digitGroup = fromInteger remaining
@@ -149,7 +149,7 @@ toByteString requestedLength requestedByteOrder i = case signum i of
                 _ -> goLENoLimit (acc <> storable digitGroup) newRemaining
     goBENoLimit :: Builder -> Integer -> Builder
     goBENoLimit acc remaining
-      | remaining == 0 = padBE acc
+      | remaining == 0 = acc
       | otherwise =
           let newRemaining = remaining `unsafeShiftR` 64
               digitGroup = fromInteger remaining
