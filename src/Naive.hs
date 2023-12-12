@@ -226,10 +226,6 @@ toByteString requestedLength requestedByteOrder i
 -- 2. Otherwise, for each digit in the ByteString argument, convert that digit
 --    to its corresponding place value, then combine all place values.
 --
--- = Important note
---
--- Empty 'ByteStrings' cannot be converted and will fail.
---
 -- = Properties
 --
 -- Throughout, @n@ is positive, @i@ is not negative, @b@ is not zero and @bs@ is
@@ -256,25 +252,32 @@ fromByteString statedByteOrder bs
       -- final answer.
       LittleEndian -> case BS.findIndexEnd (/= 0) bs of
         Nothing -> 0
-        Just end -> goLE 0 end 0 0
+        Just end -> goLE 0 end 0
       BigEndian -> case BS.findIndex (/= 0) bs of
         Nothing -> 0
         Just end -> goBE 0 end 0 (BS.length bs - 1)
   where
     -- To speed up decoding, where possible, we process eight digits at once,
     -- both for the big, and little, endian case.
-    goLE :: Integer -> Int -> Int -> Int -> Integer
-    goLE acc limit shift ix
+    goLE :: Integer -> Int -> Int -> Integer
+    goLE acc limit ix
       | ix <= (limit - 7) =
           let digitGroup = read64LE ix
-              newShift = shift + 64
+              -- Same as ix * 8, but faster. GHC might optimize this already,
+              -- but we may as well be sure.
+              shift = ix `unsafeShiftL` 3
               newIx = ix + 8
            in -- The accumulator modifier is the same as 'fromIntegral
               -- digitGroup * 2 ^ shift', but much faster. We use this in
               -- several functions: unfortunately, GHC doesn't optimize this
               -- case for Integers (or, seemingly, in general).
-              goLE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
-      | otherwise = finishLE acc limit shift ix
+              goLE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newIx
+      | otherwise = finishLE acc limit ix
+    -- Because shifts and indexes change in different ways here (indexes start
+    -- high and lower, while shifts start low and rise), we track them
+    -- separately. It doesn't really change anything, as in order to calculate
+    -- them in-situ (like we do for the little endian case), we would have to
+    -- pass a length argument anyway.
     goBE :: Integer -> Int -> Int -> Int -> Integer
     goBE acc limit shift ix
       | ix >= (limit + 7) =
@@ -285,14 +288,14 @@ fromByteString statedByteOrder bs
       | otherwise = finishBE acc limit shift ix
     -- Once we have fewer than 8 digits to process, we slow down and do them one
     -- at a time.
-    finishLE :: Integer -> Int -> Int -> Int -> Integer
-    finishLE acc limit shift ix
+    finishLE :: Integer -> Int -> Int -> Integer
+    finishLE acc limit ix
       | ix > limit = acc
       | otherwise =
           let digit = BS.index bs ix
-              newShift = shift + 8
+              shift = ix `unsafeShiftL` 3
               newIx = ix + 1
-           in finishLE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+           in finishLE (acc + fromIntegral digit `unsafeShiftL` shift) limit newIx
     finishBE :: Integer -> Int -> Int -> Int -> Integer
     finishBE acc limit shift ix
       | ix < limit = acc
