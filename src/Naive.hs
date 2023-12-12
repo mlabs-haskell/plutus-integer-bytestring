@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -17,29 +18,21 @@ import Data.Bits
     unsafeShiftR,
     (.|.),
   )
-import Data.Bool (Bool (False, True), otherwise)
-import Data.ByteString
-  ( ByteString,
-    findIndex,
-    findIndexEnd,
-    index,
-    length,
-    null,
-    replicate,
-  )
+import Data.Bool (otherwise)
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
 import Data.Eq ((/=), (==))
 import Data.Function (($))
 import Data.Int (Int)
 import Data.Maybe (Maybe (Just, Nothing))
 import Data.Monoid (mempty, (<>))
-import Data.Ord (max, (<), (<=), (>), (>=))
+import Data.Ord ((<), (<=), (>), (>=))
 import Data.Word (Word64)
 import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Err (error)
 import GHC.Num
   ( Integer,
     fromInteger,
-    signum,
     (+),
     (-),
   )
@@ -104,14 +97,16 @@ import Text.Show (show)
 -- - @snd <$> unsnoc (toByteString 0 BigEndian i)@ @=@ @Just (fromIntegral
 --   $ i `rem` 256)@
 toByteString :: Int -> ByteOrder -> Integer -> ByteString
-toByteString requestedLength requestedByteOrder i = case signum i of
-  (-1) -> error "toByteString: negative Integers cannot be converted"
-  0 -> replicate (max 1 requestedLength) 0x0
-  _ -> builderBytes $ case (requestedByteOrder, requestedLength > 0) of
-    (LittleEndian, True) -> goLELimit mempty i
-    (LittleEndian, False) -> goLENoLimit mempty i
-    (BigEndian, True) -> goBELimit mempty i
-    (BigEndian, False) -> goBENoLimit mempty i
+toByteString requestedLength requestedByteOrder i
+  | i < 0 = error "toByteString: negative Integers cannot be converted"
+  | requestedLength < 0 = error "toByteString: negative lengths don't make sense"
+  | i == 0 = BS.replicate requestedLength 0x00
+  | requestedLength == 0 = builderBytes $ case requestedByteOrder of
+      LittleEndian -> goLENoLimit mempty i
+      BigEndian -> goBENoLimit mempty i
+  | otherwise = builderBytes $ case requestedByteOrder of
+      LittleEndian -> goLELimit mempty i
+      BigEndian -> goBELimit mempty i
   where
     -- To improve performance, we extract 8 digits at a time with each 'step' of
     -- the loop. As each 'digit extraction' is a linear-time operation on an
@@ -200,9 +195,9 @@ toByteString requestedLength requestedByteOrder i = case signum i of
           <> show requestedLength
           <> " bytes"
     padLE :: Builder -> Builder
-    padLE acc = acc <> bytes (replicate (requestedLength - builderLength acc) 0x0)
+    padLE acc = acc <> bytes (BS.replicate (requestedLength - builderLength acc) 0x0)
     padBE :: Builder -> Builder
-    padBE acc = bytes (replicate (requestedLength - builderLength acc) 0x0) <> acc
+    padBE acc = bytes (BS.replicate (requestedLength - builderLength acc) 0x0) <> acc
 
 -- | Given a byte order for the representation (as per the Representation
 -- section of the 'toByteString' documentation) and a 'ByteString'
@@ -254,17 +249,17 @@ toByteString requestedLength requestedByteOrder i = case signum i of
 --   BigEndian bs@
 fromByteString :: ByteOrder -> ByteString -> Integer
 fromByteString statedByteOrder bs
-  | null bs = error "fromByteString: cannot convert empty ByteString"
+  | BS.null bs = 0
   | otherwise = case statedByteOrder of
       -- We use findIndexEnd (and findIndex for the big endian case) to skip
       -- individually decoding padding bytes, as they don't contribute to the
       -- final answer.
-      LittleEndian -> case findIndexEnd (/= 0) bs of
+      LittleEndian -> case BS.findIndexEnd (/= 0) bs of
         Nothing -> 0
         Just end -> goLE 0 end 0 0
-      BigEndian -> case findIndex (/= 0) bs of
+      BigEndian -> case BS.findIndex (/= 0) bs of
         Nothing -> 0
-        Just end -> goBE 0 end 0 (length bs - 1)
+        Just end -> goBE 0 end 0 (BS.length bs - 1)
   where
     -- To speed up decoding, where possible, we process eight digits at once,
     -- both for the big, and little, endian case.
@@ -274,13 +269,11 @@ fromByteString statedByteOrder bs
           let digitGroup = read64LE ix
               newShift = shift + 64
               newIx = ix + 8
-           in if digitGroup == 0
-                then goLE acc limit newShift newIx
-                else -- The accumulator modifier is the same as 'fromIntegral
-                -- digitGroup * 2 ^ shift', but much faster. We use this in
-                -- several functions: unfortunately, GHC doesn't optimize this
-                -- case for Integers (or, seemingly, in general).
-                  goLE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
+           in -- The accumulator modifier is the same as 'fromIntegral
+              -- digitGroup * 2 ^ shift', but much faster. We use this in
+              -- several functions: unfortunately, GHC doesn't optimize this
+              -- case for Integers (or, seemingly, in general).
+              goLE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
       | otherwise = finishLE acc limit shift ix
     goBE :: Integer -> Int -> Int -> Int -> Integer
     goBE acc limit shift ix
@@ -288,9 +281,7 @@ fromByteString statedByteOrder bs
           let digitGroup = read64BE ix
               newShift = shift + 64
               newIx = ix - 8
-           in if digitGroup == 0
-                then goBE acc limit newShift newIx
-                else goBE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
+           in goBE (acc + fromIntegral digitGroup `unsafeShiftL` shift) limit newShift newIx
       | otherwise = finishBE acc limit shift ix
     -- Once we have fewer than 8 digits to process, we slow down and do them one
     -- at a time.
@@ -298,22 +289,18 @@ fromByteString statedByteOrder bs
     finishLE acc limit shift ix
       | ix > limit = acc
       | otherwise =
-          let digit = index bs ix
+          let digit = BS.index bs ix
               newShift = shift + 8
               newIx = ix + 1
-           in if digit == 0
-                then finishLE acc limit newShift newIx
-                else finishLE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+           in finishLE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
     finishBE :: Integer -> Int -> Int -> Int -> Integer
     finishBE acc limit shift ix
       | ix < limit = acc
       | otherwise =
-          let digit = index bs ix
+          let digit = BS.index bs ix
               newShift = shift + 8
               newIx = ix - 1
-           in if digit == 0
-                then finishBE acc limit newShift newIx
-                else finishBE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
+           in finishBE (acc + fromIntegral digit `unsafeShiftL` shift) limit newShift newIx
     -- Technically, ByteStrings don't (safely) permit reads larger than one
     -- byte. Thus, we use the workaround here, where we construct a Word64 from
     -- pieces.
@@ -323,21 +310,21 @@ fromByteString statedByteOrder bs
     -- the same, but a Word64 represents eight digits, not one.
     read64LE :: Int -> Word64
     read64LE startIx =
-      fromIntegral (index bs startIx)
-        .|. (fromIntegral (index bs (startIx + 1)) `unsafeShiftL` 8)
-        .|. (fromIntegral (index bs (startIx + 2)) `unsafeShiftL` 16)
-        .|. (fromIntegral (index bs (startIx + 3)) `unsafeShiftL` 24)
-        .|. (fromIntegral (index bs (startIx + 4)) `unsafeShiftL` 32)
-        .|. (fromIntegral (index bs (startIx + 5)) `unsafeShiftL` 40)
-        .|. (fromIntegral (index bs (startIx + 6)) `unsafeShiftL` 48)
-        .|. (fromIntegral (index bs (startIx + 7)) `unsafeShiftL` 56)
+      fromIntegral (BS.index bs startIx)
+        .|. (fromIntegral (BS.index bs (startIx + 1)) `unsafeShiftL` 8)
+        .|. (fromIntegral (BS.index bs (startIx + 2)) `unsafeShiftL` 16)
+        .|. (fromIntegral (BS.index bs (startIx + 3)) `unsafeShiftL` 24)
+        .|. (fromIntegral (BS.index bs (startIx + 4)) `unsafeShiftL` 32)
+        .|. (fromIntegral (BS.index bs (startIx + 5)) `unsafeShiftL` 40)
+        .|. (fromIntegral (BS.index bs (startIx + 6)) `unsafeShiftL` 48)
+        .|. (fromIntegral (BS.index bs (startIx + 7)) `unsafeShiftL` 56)
     read64BE :: Int -> Word64
     read64BE endIx =
-      fromIntegral (index bs endIx)
-        .|. (fromIntegral (index bs (endIx - 1)) `unsafeShiftL` 8)
-        .|. (fromIntegral (index bs (endIx - 2)) `unsafeShiftL` 16)
-        .|. (fromIntegral (index bs (endIx - 3)) `unsafeShiftL` 24)
-        .|. (fromIntegral (index bs (endIx - 4)) `unsafeShiftL` 32)
-        .|. (fromIntegral (index bs (endIx - 5)) `unsafeShiftL` 40)
-        .|. (fromIntegral (index bs (endIx - 6)) `unsafeShiftL` 48)
-        .|. (fromIntegral (index bs (endIx - 7)) `unsafeShiftL` 56)
+      fromIntegral (BS.index bs endIx)
+        .|. (fromIntegral (BS.index bs (endIx - 1)) `unsafeShiftL` 8)
+        .|. (fromIntegral (BS.index bs (endIx - 2)) `unsafeShiftL` 16)
+        .|. (fromIntegral (BS.index bs (endIx - 3)) `unsafeShiftL` 24)
+        .|. (fromIntegral (BS.index bs (endIx - 4)) `unsafeShiftL` 32)
+        .|. (fromIntegral (BS.index bs (endIx - 5)) `unsafeShiftL` 40)
+        .|. (fromIntegral (BS.index bs (endIx - 6)) `unsafeShiftL` 48)
+        .|. (fromIntegral (BS.index bs (endIx - 7)) `unsafeShiftL` 56)

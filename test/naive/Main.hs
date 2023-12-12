@@ -32,7 +32,8 @@ import Naive (fromByteString, toByteString)
 import SuitableInteger (countBytes, toInteger)
 import System.IO (IO)
 import Test.QuickCheck
-  ( Positive (Positive),
+  ( NonNegative (NonNegative),
+    Positive (Positive),
     Property,
     classify,
     counterexample,
@@ -48,6 +49,7 @@ import Test.Tasty
     testGroup,
   )
 import Test.Tasty.QuickCheck (QuickCheckTests, testProperty)
+import Text.Show (show)
 
 main :: IO ()
 main =
@@ -94,7 +96,7 @@ toByteStringProp1 = testProperty propName . property $ \i ->
         <> "Just (fromIntegral $ i `rem` 256)"
 
 toByteStringProp2 :: TestTree
-toByteStringProp2 = testProperty propName . property $ \d w8 ->
+toByteStringProp2 = testProperty propName . property $ \(NonNegative d) (Positive w8) ->
   let i = fromIntegral w8
       expected = cons w8 (replicate (max 0 (d - 1)) 0)
       actual = toByteString d LittleEndian i
@@ -175,9 +177,15 @@ fromByteStringProp4 = testProperty propName . property $ \neBS (Positive n) ->
 fromByteStringProp5 :: TestTree
 fromByteStringProp5 = testProperty propName . property $ \neBS ->
   let bs = NEBS.toByteString neBS
-      actualLE = toByteString (length bs) LittleEndian (fromByteString LittleEndian bs)
-      actualBE = toByteString (length bs) BigEndian (fromByteString BigEndian bs)
-   in (bs === actualLE) .&. (bs == actualBE)
+      leNumber = fromByteString LittleEndian bs
+      beNumber = fromByteString BigEndian bs
+      actualLE = toByteString (length bs) LittleEndian leNumber
+      actualBE = toByteString (length bs) BigEndian beNumber
+   in counterexample ("BE number: " <> show beNumber)
+        . counterexample ("LE number: " <> show leNumber)
+        . counterexample ("Actual BE: " <> hexByteString actualBE)
+        . counterexample ("Actual LE: " <> hexByteString actualLE)
+        $ (bs === actualLE) .&. (bs == actualBE)
   where
     propName :: TestName
     propName = "toByteString (length bs) bo (fromByteString bo bs) = bs"
