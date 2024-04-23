@@ -27,6 +27,8 @@ import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Num ((-))
 import GHC.Real (fromIntegral, rem)
 import Helpers (hexByteString)
+import HexByteString (HexByteString (HexByteString))
+import Logical.Naive (complement)
 import NEByteString qualified as NEBS
 import Naive (fromByteString, toByteString)
 import SuitableInteger (countBytes, toInteger)
@@ -67,6 +69,10 @@ main =
           fromByteStringProp3,
           fromByteStringProp4,
           fromByteStringProp5
+        ],
+      testGroup
+        "complement"
+        [ complementProp
         ]
     ]
   where
@@ -78,6 +84,13 @@ main =
     moreTests = max 10_000
 
 -- Properties
+
+complementProp :: TestTree
+complementProp = testProperty propName . property $ \(HexByteString bs) ->
+  bs === (complement . complement $ bs)
+  where
+    propName :: TestName
+    propName = "complement . complement = id"
 
 toByteStringProp1 :: TestTree
 toByteStringProp1 = testProperty propName . property $ \i ->

@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Main (main) where
@@ -14,6 +15,8 @@ import Data.Semigroup ((<>))
 import Data.String (String)
 import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Num (Integer, (*), (-))
+import Logical.Naive qualified as Naive
+import Logical.Optimized qualified as Optimized
 import Naive (fromByteString, toByteString)
 import System.IO (IO)
 import Test.Tasty.Bench
@@ -54,8 +57,33 @@ main =
             [ bgroup "little endian" . fmap (mkPaddingFBS LittleEndian) $ sizes,
               bgroup "big endian" . fmap (mkPaddingFBS BigEndian) $ sizes
             ]
+        ],
+      bgroup
+        "complement"
+        [ bgroup "naive" . fmap mkComplementNaive $ sizes,
+          bgroup "optimized" . fmap mkComplementOptimized $ sizes
         ]
     ]
+
+mkComplementNaive :: Int -> Benchmark
+mkComplementNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes $ nf Naive.complement dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
+
+mkComplementOptimized :: Int -> Benchmark
+mkComplementOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes $ nf Optimized.complement dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
 
 mkNoPaddingTBS :: ByteOrder -> Int -> Benchmark
 mkNoPaddingTBS bo bytes =

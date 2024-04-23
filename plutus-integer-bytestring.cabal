@@ -50,6 +50,7 @@ library
   import:          lang
   exposed-modules:
     Logical.Naive
+    Logical.Optimized
     Naive
 
   build-depends:
@@ -65,6 +66,7 @@ library test-utils
   import:          lang
   exposed-modules:
     Helpers
+    HexByteString
     NEByteString
     SuitableInteger
 
@@ -86,6 +88,16 @@ test-suite naive-tests
     , plutus-integer-bytestring
 
   hs-source-dirs: test/naive
+
+test-suite consistency-tests
+  import:         test-lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  build-depends:
+    , bytestring
+    , plutus-integer-bytestring
+
+  hs-source-dirs: test/consistency
 
 -- Benchmarks
 
