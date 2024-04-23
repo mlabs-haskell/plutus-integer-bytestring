@@ -48,11 +48,15 @@ common bench-lang
 
 library
   import:          lang
-  exposed-modules: Naive
+  exposed-modules:
+    Logical.Naive
+    Naive
+
   build-depends:
     , bytestring
     , bytestring-strict-builder
     , bytestring-to-vector
+    , indexed-traversable
     , vector
 
   hs-source-dirs:  src
