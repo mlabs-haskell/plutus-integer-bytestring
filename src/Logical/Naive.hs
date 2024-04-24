@@ -23,19 +23,19 @@ import GHC.Exts qualified as GHC
 import Prelude
   ( Bool,
     Integer,
-    Ordering (EQ, GT, LT),
-    compare,
     error,
     fromInteger,
+    min,
+    not,
     otherwise,
     quotRem,
-    take,
     ($),
     (*),
     (+),
     (-),
     (/=),
     (<),
+    (<>),
     (>),
     (>=),
   )
@@ -47,44 +47,41 @@ replicate len byte
   | byte > 255 = error "replicate: byte too large"
   | otherwise = BS.replicate (fromInteger len) . fromInteger $ byte
 
-and :: Integer -> ByteString -> ByteString -> ByteString
-and len = case compare len 0 of
-  LT -> error "and: requested a negative target length"
-  EQ -> \bs -> GHC.fromList . BS.zipWith (.&.) bs
-  GT -> \bs1 bs2 ->
-    let lenInt = fromInteger len
-        len1 = BS.length bs1
-        len2 = BS.length bs2
-     in if
-            | len1 < lenInt -> error "and: insufficient bytes in first arg"
-            | len2 < lenInt -> error "and: insufficient bytes in second arg"
-            | otherwise -> GHC.fromListN lenInt . take lenInt . BS.zipWith (.&.) bs1 $ bs2
+and :: Bool -> ByteString -> ByteString -> ByteString
+and shouldPad bs1 bs2 =
+  let len1 = BS.length bs1
+      len2 = BS.length bs2
+      lenCombined = min len1 len2
+      combined = GHC.fromListN lenCombined . BS.zipWith (.&.) bs1 $ bs2
+   in if
+          | not shouldPad -> combined
+          | len1 > lenCombined -> combined <> BS.drop lenCombined bs1
+          | len2 > lenCombined -> combined <> BS.drop lenCombined bs2
+          | otherwise -> combined
 
-or :: Integer -> ByteString -> ByteString -> ByteString
-or len = case compare len 0 of
-  LT -> error "or: requested a negative target length"
-  EQ -> \bs -> GHC.fromList . BS.zipWith (.|.) bs
-  GT -> \bs1 bs2 ->
-    let lenInt = fromInteger len
-        len1 = BS.length bs1
-        len2 = BS.length bs2
-     in if
-            | len1 < lenInt -> error "or: insufficient bytes in first arg"
-            | len2 < lenInt -> error "or: insufficient bytes in second arg"
-            | otherwise -> GHC.fromListN lenInt . take lenInt . BS.zipWith (.|.) bs1 $ bs2
+or :: Bool -> ByteString -> ByteString -> ByteString
+or shouldPad bs1 bs2 =
+  let len1 = BS.length bs1
+      len2 = BS.length bs2
+      lenCombined = min len1 len2
+      combined = GHC.fromListN lenCombined . BS.zipWith (.|.) bs1 $ bs2
+   in if
+          | not shouldPad -> combined
+          | len1 > lenCombined -> combined <> BS.drop lenCombined bs1
+          | len2 > lenCombined -> combined <> BS.drop lenCombined bs2
+          | otherwise -> combined
 
-xor :: Integer -> ByteString -> ByteString -> ByteString
-xor len = case compare len 0 of
-  LT -> error "xor: requested a negative target length"
-  EQ -> \bs -> GHC.fromList . BS.zipWith Bits.xor bs
-  GT -> \bs1 bs2 ->
-    let lenInt = fromInteger len
-        len1 = BS.length bs1
-        len2 = BS.length bs2
-     in if
-            | len1 < lenInt -> error "xor: insufficient bytes in first arg"
-            | len2 < lenInt -> error "xor: insufficient bytes in second arg"
-            | otherwise -> GHC.fromListN lenInt . take lenInt . BS.zipWith Bits.xor bs1 $ bs2
+xor :: Bool -> ByteString -> ByteString -> ByteString
+xor shouldPad bs1 bs2 =
+  let len1 = BS.length bs1
+      len2 = BS.length bs2
+      lenCombined = min len1 len2
+      combined = GHC.fromListN lenCombined . BS.zipWith Bits.xor bs1 $ bs2
+   in if
+          | not shouldPad -> combined
+          | len1 > lenCombined -> combined <> BS.drop lenCombined bs1
+          | len2 > lenCombined -> combined <> BS.drop lenCombined bs2
+          | otherwise -> combined
 
 complement :: ByteString -> ByteString
 complement = BS.map Bits.complement
