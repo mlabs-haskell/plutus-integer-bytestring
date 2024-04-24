@@ -67,6 +67,7 @@ library test-utils
   exposed-modules:
     Helpers
     HexByteString
+    Laws
     NEByteString
     SuitableInteger
 
@@ -74,6 +75,8 @@ library test-utils
     , bytestring
     , QuickCheck
     , quickcheck-instances
+    , tasty
+    , tasty-quickcheck
 
   hs-source-dirs:  test-utils
 

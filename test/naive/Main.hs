@@ -1,5 +1,6 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Main (main) where
@@ -13,8 +14,6 @@ import Data.ByteString
     singleton,
     uncons,
   )
-import Data.Eq ((==))
-import Data.Function (($))
 import Data.Functor ((<$>))
 import Data.Int (Int)
 import Data.Maybe (Maybe (Just))
@@ -28,7 +27,14 @@ import GHC.Num ((-))
 import GHC.Real (fromIntegral, rem)
 import Helpers (hexByteString)
 import HexByteString (HexByteString (HexByteString))
-import Logical.Naive (complement)
+import Laws
+  ( abelianSemigroupLaws,
+    absorbingLaws,
+    idempotenceLaws,
+    involuteLaws,
+    monoidLaws,
+  )
+import Logical.Naive (and, complement, or, xor)
 import NEByteString qualified as NEBS
 import Naive (fromByteString, toByteString)
 import SuitableInteger (countBytes, toInteger)
@@ -52,6 +58,7 @@ import Test.Tasty
   )
 import Test.Tasty.QuickCheck (QuickCheckTests, testProperty)
 import Text.Show (show)
+import Prelude (Bool (False, True), ($), (==))
 
 main :: IO ()
 main =
@@ -73,6 +80,33 @@ main =
       testGroup
         "complement"
         [ complementProp
+        ],
+      testGroup
+        "and"
+        [ testGroup "abelian semigroup (truncating)" . abelianSemigroupLaws $ and False,
+          testGroup "idempotent semigroup (truncating)" . idempotenceLaws $ and False,
+          testGroup "absorbing element (truncating)" . absorbingLaws (and False) $ "",
+          testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ and True,
+          testGroup "idempotent semigroup (padding)" . idempotenceLaws $ and True,
+          testGroup "monoid (padding)" . monoidLaws (and True) $ ""
+        ],
+      testGroup
+        "or"
+        [ testGroup "abelian semigroup (truncating)" . abelianSemigroupLaws $ or False,
+          testGroup "idempotent semigroup (truncating)" . idempotenceLaws $ or False,
+          testGroup "absorbing element (truncating)" . absorbingLaws (or False) $ "",
+          testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ or True,
+          testGroup "idempotent semigroup (padding)" . idempotenceLaws $ or True,
+          testGroup "monoid (padding)" . monoidLaws (or True) $ ""
+        ],
+      testGroup
+        "xor"
+        [ testGroup "abelian semigroup (truncating)" . abelianSemigroupLaws $ xor False,
+          testGroup "absorbing element (truncating)" . absorbingLaws (xor False) $ "",
+          testGroup "involute (truncating)" . involuteLaws $ xor False,
+          testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ xor True,
+          testGroup "monoid (padding)" . monoidLaws (xor True) $ "",
+          testGroup "involute (padding)" . involuteLaws $ xor True
         ]
     ]
   where
