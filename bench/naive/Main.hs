@@ -28,6 +28,7 @@ import Test.Tasty.Bench
     nf,
   )
 import Text.Show (show)
+import Prelude (Bool (False))
 
 main :: IO ()
 main =
@@ -62,8 +63,33 @@ main =
         "complement"
         [ bgroup "naive" . fmap mkComplementNaive $ sizes,
           bgroup "optimized" . fmap mkComplementOptimized $ sizes
+        ],
+      bgroup
+        "and"
+        [ bgroup "naive (symmetric)" . fmap mkAndSymmetricNaive $ sizes,
+          bgroup "optimized (symmetric)" . fmap mkAndSymmetricOptimized $ sizes
         ]
     ]
+
+mkAndSymmetricNaive :: Int -> Benchmark
+mkAndSymmetricNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Naive.and False dat) $ dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
+
+mkAndSymmetricOptimized :: Int -> Benchmark
+mkAndSymmetricOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Optimized.and False dat) $ dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
 
 mkComplementNaive :: Int -> Benchmark
 mkComplementNaive len =
