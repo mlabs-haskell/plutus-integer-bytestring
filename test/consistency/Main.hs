@@ -7,6 +7,7 @@ import Control.Category ((.))
 import Data.Function (($))
 import Data.Ord (max)
 import HexByteString (HexByteString (HexByteString))
+import IndexedByteString (toTestData)
 import Logical.Naive qualified as Naive
 import Logical.Optimized qualified as Optimized
 import System.IO (IO)
@@ -28,7 +29,8 @@ main =
     [ testProperty "complement" complementIsConsistent,
       testProperty "and" andIsConsistent,
       testProperty "or" orIsConsistent,
-      testProperty "xor" xorIsConsistent
+      testProperty "xor" xorIsConsistent,
+      testProperty "setBit" setBitIsConsistent
     ]
   where
     -- By default, QuickCheck (and hence, tasty-quickcheck) runs only 100 tests.
@@ -58,3 +60,9 @@ xorIsConsistent :: Property
 xorIsConsistent = property $ \(shouldPad, HexByteString bs1, HexByteString bs2) ->
   HexByteString (Naive.xor shouldPad bs1 bs2)
     === HexByteString (Optimized.xor shouldPad bs1 bs2)
+
+setBitIsConsistent :: Property
+setBitIsConsistent = property $ \(ibs, b) ->
+  let (bs, i) = toTestData ibs
+   in HexByteString (Naive.setBit bs i b)
+        === HexByteString (Optimized.setBit bs i b)

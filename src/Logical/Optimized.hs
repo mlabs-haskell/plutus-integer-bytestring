@@ -1,4 +1,5 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -7,6 +8,7 @@ module Logical.Optimized
     and,
     or,
     xor,
+    setBit,
   )
 where
 
@@ -20,16 +22,27 @@ import Data.Foldable (for_)
 import Data.Word (Word64, Word8)
 import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (Ptr, castPtr, plusPtr)
-import Foreign.Storable (peekElemOff, pokeElemOff)
+import Foreign.Storable
+  ( peekByteOff,
+    peekElemOff,
+    pokeByteOff,
+    pokeElemOff,
+  )
 import System.IO.Unsafe (unsafeDupablePerformIO)
 import Prelude
   ( Bool,
     Int,
+    Integer,
+    error,
+    fromIntegral,
+    otherwise,
     quotRem,
     ($),
     (*),
+    (+),
     (-),
     (<),
+    (>=),
   )
 
 {-# INLINEABLE complement #-}
@@ -132,3 +145,22 @@ xor shouldPad bs1 bs2 =
               w8_1 <- peekElemOff smallDstPtr i
               w8_2 <- peekElemOff smallTraversePtr i
               pokeElemOff smallDstPtr i $ Bits.xor w8_1 w8_2
+
+{-# INLINEABLE setBit #-}
+setBit :: ByteString -> Integer -> Bool -> ByteString
+setBit bs ix b =
+  let ixInt = fromIntegral ix
+      len = BS.length bs
+      bitLen = len * 8
+   in if
+          | ixInt < 0 -> error "setBit: negative index"
+          | ixInt >= bitLen -> error "setBit: index out of bounds"
+          | otherwise -> unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr -> do
+              BSI.create len $ \dstPtr -> do
+                copyBytes dstPtr (castPtr srcPtr) len
+                let (bigIx, littleIx) = ixInt `quotRem` 8
+                let flipIx = len + bigIx - 1
+                w8 :: Word8 <- peekByteOff srcPtr flipIx
+                if b
+                  then pokeByteOff dstPtr flipIx . Bits.setBit w8 $ littleIx
+                  else pokeByteOff dstPtr flipIx . Bits.clearBit w8 $ littleIx

@@ -28,7 +28,7 @@ import Test.Tasty.Bench
     nf,
   )
 import Text.Show (show)
-import Prelude (Bool (False))
+import Prelude (Bool (False, True))
 
 main :: IO ()
 main =
@@ -68,8 +68,33 @@ main =
         "and"
         [ bgroup "naive (symmetric)" . fmap mkAndSymmetricNaive $ sizes,
           bgroup "optimized (symmetric)" . fmap mkAndSymmetricOptimized $ sizes
+        ],
+      bgroup
+        "setBit"
+        [ bgroup "naive" . fmap mkSetBitNaive $ sizes,
+          bgroup "optimized" . fmap mkSetBitOptimized $ sizes
         ]
     ]
+
+mkSetBitNaive :: Int -> Benchmark
+mkSetBitNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Naive.setBit dat 0) $ True
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = replicate len 0x00
+
+mkSetBitOptimized :: Int -> Benchmark
+mkSetBitOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Optimized.setBit dat 0) $ True
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = replicate len 0x00
 
 mkAndSymmetricNaive :: Int -> Benchmark
 mkAndSymmetricNaive len =

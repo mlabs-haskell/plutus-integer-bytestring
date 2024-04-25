@@ -67,6 +67,7 @@ library test-utils
   exposed-modules:
     Helpers
     HexByteString
+    IndexedByteString
     Laws
     NEByteString
     SuitableInteger
