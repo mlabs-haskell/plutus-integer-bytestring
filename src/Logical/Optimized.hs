@@ -9,6 +9,7 @@ module Logical.Optimized
     or,
     xor,
     setBit,
+    setBits,
   )
 where
 
@@ -18,7 +19,7 @@ import Data.Bits qualified as Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BSI
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Data.Word (Word64, Word8)
 import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (Ptr, castPtr, plusPtr)
@@ -31,15 +32,16 @@ import Foreign.Storable
 import System.IO.Unsafe (unsafeDupablePerformIO)
 import Prelude
   ( Bool,
+    IO,
     Int,
     Integer,
     error,
+    fromInteger,
     fromIntegral,
     otherwise,
     quotRem,
     ($),
     (*),
-    (+),
     (-),
     (<),
     (>=),
@@ -159,8 +161,34 @@ setBit bs ix b =
               BSI.create len $ \dstPtr -> do
                 copyBytes dstPtr (castPtr srcPtr) len
                 let (bigIx, littleIx) = ixInt `quotRem` 8
-                let flipIx = len + bigIx - 1
+                let flipIx = len - bigIx - 1
                 w8 :: Word8 <- peekByteOff srcPtr flipIx
                 if b
                   then pokeByteOff dstPtr flipIx . Bits.setBit w8 $ littleIx
                   else pokeByteOff dstPtr flipIx . Bits.clearBit w8 $ littleIx
+
+{-# INLINEABLE setBits #-}
+setBits :: ByteString -> [(Integer, Bool)] -> ByteString
+setBits bs changelist = unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr ->
+  BSI.create len $ \dstPtr -> do
+    copyBytes dstPtr (castPtr srcPtr) len
+    traverse_ (go dstPtr) changelist
+  where
+    go :: Ptr Word8 -> (Integer, Bool) -> IO ()
+    go ptr (i, b) =
+      let intI = fromInteger i
+       in if
+              | intI < 0 -> error "setBits: negative index"
+              | intI >= bitLen -> error "setBits: index out of bounds"
+              | otherwise -> do
+                  let (bigIx, littleIx) = intI `quotRem` 8
+                  let flipIx = len - bigIx - 1
+                  w8 :: Word8 <- peekByteOff ptr flipIx
+                  pokeByteOff ptr flipIx $
+                    if b
+                      then Bits.setBit w8 littleIx
+                      else Bits.clearBit w8 littleIx
+    len :: Int
+    len = BS.length bs
+    bitLen :: Int
+    bitLen = len * 8

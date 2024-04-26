@@ -10,6 +10,7 @@ module Logical.Naive
     complement,
     getBit,
     setBit,
+    setBits,
   )
 where
 
@@ -18,6 +19,7 @@ import Data.Bits (testBit, (.&.), (.|.))
 import Data.Bits qualified as Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.Foldable (foldl')
 import Data.Functor.WithIndex (imap)
 import GHC.Exts qualified as GHC
 import Prelude
@@ -31,7 +33,6 @@ import Prelude
     quotRem,
     ($),
     (*),
-    (+),
     (-),
     (/=),
     (<),
@@ -96,7 +97,7 @@ getBit bs ix =
           | ixInt >= bitLen -> error "getBit: index out of bounds"
           | otherwise ->
               let (bigIx, littleIx) = ixInt `quotRem` 8
-                  flipIx = len + bigIx - 1
+                  flipIx = len - bigIx - 1
                in testBit (BS.index bs flipIx) littleIx
 
 setBit :: ByteString -> Integer -> Bool -> ByteString
@@ -109,7 +110,7 @@ setBit bs ix b =
           | ixInt >= bitLen -> error "setBit: index out of bounds"
           | otherwise ->
               let (bigIx, littleIx) = ixInt `quotRem` 8
-                  flipIx = len + bigIx - 1
+                  flipIx = len - bigIx - 1
                in GHC.fromListN len
                     . imap
                       ( \i e ->
@@ -120,3 +121,6 @@ setBit bs ix b =
                       )
                     . GHC.toList
                     $ bs
+
+setBits :: ByteString -> [(Integer, Bool)] -> ByteString
+setBits = foldl' (\bs (i, b) -> setBit bs i b)
