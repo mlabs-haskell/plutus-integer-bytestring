@@ -11,6 +11,8 @@ module IndexedByteString
     toTestData,
     IndexedByteStringMany,
     toTestDataMany,
+    IndexedByteStringSplit,
+    toTestDataSplit,
   )
 where
 
@@ -131,3 +133,36 @@ instance Function IndexedByteStringMany where
 
 toTestDataMany :: IndexedByteStringMany -> (ByteString, [(Integer, Bool)])
 toTestDataMany (IndexedByteStringMany (HexByteString bs) ixes) = (bs, ixes)
+
+data IndexedByteStringSplit
+  = IndexedByteStringSplit HexByteString [(Integer, Bool)] [(Integer, Bool)]
+  deriving stock (Eq, Show, Ord)
+
+instance Arbitrary IndexedByteStringSplit where
+  arbitrary = do
+    IndexedByteStringMany hbs ixes <- arbitrary
+    let len = length ixes
+    (is, js) <- splitAt <$> chooseInt (0, len) <*> pure ixes
+    pure $ IndexedByteStringSplit hbs is js
+  shrink (IndexedByteStringSplit hbs is js) = do
+    IndexedByteStringMany hbs' ixes' <- shrink $ IndexedByteStringMany hbs (is <> js)
+    let len = length ixes'
+    cutPoint <- [0 .. len]
+    let (is', js') = splitAt cutPoint ixes'
+    pure $ IndexedByteStringSplit hbs' is' js'
+
+instance CoArbitrary IndexedByteStringSplit where
+  coarbitrary (IndexedByteStringSplit hbs is js) =
+    coarbitrary hbs . coarbitrary is . coarbitrary js
+
+instance Function IndexedByteStringSplit where
+  function =
+    functionMap
+      (\(IndexedByteStringSplit hbs is js) -> (hbs, is, js))
+      (\(hbs, is, js) -> IndexedByteStringSplit hbs is js)
+
+toTestDataSplit ::
+  IndexedByteStringSplit ->
+  (ByteString, [(Integer, Bool)], [(Integer, Bool)])
+toTestDataSplit (IndexedByteStringSplit (HexByteString bs) is js) =
+  (bs, is, js)

@@ -27,6 +27,7 @@ import GHC.Num ((-))
 import GHC.Real (fromIntegral, rem)
 import Helpers (hexByteString)
 import HexByteString (HexByteString (HexByteString))
+import IndexedByteString (toTestData, toTestDataSplit)
 import Laws
   ( abelianSemigroupLaws,
     absorbingLaws,
@@ -34,7 +35,14 @@ import Laws
     involuteLaws,
     monoidLaws,
   )
-import Logical.Naive (and, complement, or, xor)
+import Logical.Naive
+  ( and,
+    complement,
+    getBit,
+    or,
+    setBits,
+    xor,
+  )
 import NEByteString qualified as NEBS
 import Naive (fromByteString, toByteString)
 import SuitableInteger (countBytes, toInteger)
@@ -107,6 +115,14 @@ main =
           testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ xor True,
           testGroup "monoid (padding)" . monoidLaws (xor True) $ "",
           testGroup "involute (padding)" . involuteLaws $ xor True
+        ],
+      testGroup
+        "get-set"
+        [ testProperty "Get-set" getSetLaw,
+          testProperty "Set-get" setGetLaw,
+          testProperty "Set-set" setSetLaw,
+          testProperty "setBits bs [] = bs" setEmptyLaw,
+          testProperty "setBits (setBits bs is) js = setBits bs (is <> js)" setConcatLaw
         ]
     ]
   where
@@ -118,6 +134,30 @@ main =
     moreTests = max 10_000
 
 -- Properties
+
+setConcatLaw :: Property
+setConcatLaw = property $ \sbs ->
+  let (bs, is, js) = toTestDataSplit sbs
+   in setBits (setBits bs is) js === setBits bs (is <> js)
+
+setEmptyLaw :: Property
+setEmptyLaw = property $ \(HexByteString bs) ->
+  setBits bs [] === bs
+
+getSetLaw :: Property
+getSetLaw = property $ \ibs ->
+  let (bs, i) = toTestData ibs
+   in setBits bs [(i, getBit bs i)] === bs
+
+setGetLaw :: Property
+setGetLaw = property $ \(ibs, b) ->
+  let (bs, i) = toTestData ibs
+   in getBit (setBits bs [(i, b)]) i === b
+
+setSetLaw :: Property
+setSetLaw = property $ \(ibs, b1, b2) ->
+  let (bs, i) = toTestData ibs
+   in setBits bs [(i, b1), (i, b2)] === setBits bs [(i, b2)]
 
 complementProp :: TestTree
 complementProp = testProperty propName . property $ \(HexByteString bs) ->
