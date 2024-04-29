@@ -7,7 +7,8 @@ module Main (main) where
 
 import Control.Category ((.))
 import Data.ByteString
-  ( cons,
+  ( ByteString,
+    cons,
     length,
     replicate,
     reverse,
@@ -54,7 +55,7 @@ import Test.QuickCheck
     classify,
     counterexample,
     property,
-    (.&.),
+    (.&&.),
     (===),
   )
 import Test.Tasty
@@ -87,7 +88,8 @@ main =
         ],
       testGroup
         "complement"
-        [ complementProp
+        [ complementProp,
+          testProperty "De Morgan laws" deMorganLaws
         ],
       testGroup
         "and"
@@ -96,7 +98,11 @@ main =
           testGroup "absorbing element (truncating)" . absorbingLaws (and False) $ "",
           testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ and True,
           testGroup "idempotent semigroup (padding)" . idempotenceLaws $ and True,
-          testGroup "monoid (padding)" . monoidLaws (and True) $ ""
+          testGroup "monoid (padding)" . monoidLaws (and True) $ "",
+          testProperty "left distribution over OR (truncation)" . leftDist (and False) $ or False,
+          testProperty "left distribution over XOR (truncation)" . leftDist (and False) $ xor False,
+          testProperty "left distribution over itself (truncation)" . leftDist (and False) $ and False,
+          testGroup "distribution over itself (padding)" . distributiveLaws $ and True
         ],
       testGroup
         "or"
@@ -105,7 +111,10 @@ main =
           testGroup "absorbing element (truncating)" . absorbingLaws (or False) $ "",
           testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ or True,
           testGroup "idempotent semigroup (padding)" . idempotenceLaws $ or True,
-          testGroup "monoid (padding)" . monoidLaws (or True) $ ""
+          testGroup "monoid (padding)" . monoidLaws (or True) $ "",
+          testProperty "left distribution over AND (truncation)" . leftDist (or False) $ and False,
+          testProperty "left distribution over itself (truncation)" . leftDist (or False) $ or False,
+          testGroup "distribution over itself (padding)" . distributiveLaws $ or True
         ],
       testGroup
         "xor"
@@ -134,6 +143,27 @@ main =
     moreTests = max 10_000
 
 -- Properties
+
+leftDist ::
+  (ByteString -> ByteString -> ByteString) ->
+  (ByteString -> ByteString -> ByteString) ->
+  Property
+leftDist f g = property $ \(HexByteString x, HexByteString y, HexByteString z) ->
+  HexByteString (f x (g y z)) === HexByteString (g (f x y) (f x z))
+
+distributiveLaws ::
+  (ByteString -> ByteString -> ByteString) ->
+  [TestTree]
+distributiveLaws f =
+  [ testProperty "left" . leftDist f $ f,
+    testProperty "right" . property $ \(HexByteString x, HexByteString y, HexByteString z) ->
+      HexByteString (f (f x y) z) === HexByteString (f (f x z) (f y z))
+  ]
+
+deMorganLaws :: Property
+deMorganLaws = property $ \(HexByteString bs1, HexByteString bs2, b) ->
+  (complement (or b bs1 bs2) === and b (complement bs1) (complement bs2))
+    .&&. (complement (and b bs1 bs2) === or b (complement bs1) (complement bs2))
 
 setConcatLaw :: Property
 setConcatLaw = property $ \sbs ->
@@ -227,7 +257,7 @@ fromByteStringProp2 = testProperty propName . property $ \w8 ->
       input = singleton w8
       actualBE = fromByteString BigEndian input
       actualLE = fromByteString LittleEndian input
-   in (expected === actualBE) .&. (expected === actualLE)
+   in (expected === actualBE) .&&. (expected === actualLE)
   where
     propName :: TestName
     propName =
@@ -240,7 +270,7 @@ fromByteStringProp3 = testProperty propName . property $ \i ->
   let i' = toInteger i
       actualLE = fromByteString LittleEndian (toByteString 0 LittleEndian i')
       actualBE = fromByteString BigEndian (toByteString 0 BigEndian i')
-   in classifyTBSCodePath (countBytes i') $ (i' === actualLE) .&. (i' === actualBE)
+   in classifyTBSCodePath (countBytes i') $ (i' === actualLE) .&&. (i' === actualBE)
   where
     propName :: TestName
     propName =
@@ -272,7 +302,7 @@ fromByteStringProp5 = testProperty propName . property $ \neBS ->
         . counterexample ("LE number: " <> show leNumber)
         . counterexample ("Actual BE: " <> hexByteString actualBE)
         . counterexample ("Actual LE: " <> hexByteString actualLE)
-        $ (bs === actualLE) .&. (bs == actualBE)
+        $ (bs === actualLE) .&&. (bs == actualBE)
   where
     propName :: TestName
     propName = "toByteString (length bs) bo (fromByteString bo bs) = bs"
