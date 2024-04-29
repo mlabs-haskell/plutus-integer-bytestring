@@ -1,11 +1,13 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Main (main) where
 
 import Control.Category ((.))
+import Control.Monad (guard)
 import Data.ByteString
   ( ByteString,
     cons,
@@ -15,13 +17,14 @@ import Data.ByteString
     singleton,
     uncons,
   )
+import Data.ByteString qualified as BS
 import Data.Functor ((<$>))
 import Data.Int (Int)
 import Data.Maybe (Maybe (Just))
 import Data.Ord (max, (<), (>))
 import Data.Semigroup ((<>))
 import Data.Tuple (fst)
-import Data.Word (Word)
+import Data.Word (Word, Word8)
 import Foreign.Storable (sizeOf)
 import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Num ((-))
@@ -44,17 +47,23 @@ import Logical.Naive
     setBits,
     xor,
   )
+import Logical.Naive qualified as LNaive
 import NEByteString qualified as NEBS
 import Naive (fromByteString, toByteString)
 import SuitableInteger (countBytes, toInteger)
 import System.IO (IO)
 import Test.QuickCheck
-  ( NonNegative (NonNegative),
+  ( Gen,
+    NonNegative (NonNegative),
     Positive (Positive),
     Property,
+    arbitrary,
+    chooseInt,
     classify,
     counterexample,
+    forAllShrink,
     property,
+    shrink,
     (.&&.),
     (===),
   )
@@ -67,7 +76,15 @@ import Test.Tasty
   )
 import Test.Tasty.QuickCheck (QuickCheckTests, testProperty)
 import Text.Show (show)
-import Prelude (Bool (False, True), ($), (==))
+import Prelude
+  ( Bool (False, True),
+    Integer,
+    pure,
+    ($),
+    (+),
+    (==),
+    (>=),
+  )
 
 main :: IO ()
 main =
@@ -85,6 +102,17 @@ main =
           fromByteStringProp3,
           fromByteStringProp4,
           fromByteStringProp5
+        ],
+      testGroup
+        "replicate"
+        [ testProperty "replicate 0 b = \"\"" . property $ \(w8 :: Word8) ->
+            LNaive.replicate 0 (fromIntegral w8) === "",
+          testProperty "replicate n b <> replicate m b = replicate (n + m) b" . property $
+            \(NonNegative n, NonNegative m, w8 :: Word8) ->
+              (LNaive.replicate n (fromIntegral w8) <> LNaive.replicate m (fromIntegral w8))
+                === LNaive.replicate (n + m) (fromIntegral w8),
+          testProperty "(replicate n b)[i] = b" . forAllShrink genReplicate shrinkReplicate $ \(w8, n, i) ->
+            BS.index (LNaive.replicate n (fromIntegral w8)) i === w8
         ],
       testGroup
         "complement"
@@ -141,6 +169,24 @@ main =
     -- at least 10,000, while allowing more to be set via CLI if required.
     moreTests :: QuickCheckTests -> QuickCheckTests
     moreTests = max 10_000
+
+-- Generators and shrinkers
+
+genReplicate :: Gen (Word8, Integer, Int)
+genReplicate = do
+  w8 <- arbitrary
+  Positive len <- arbitrary
+  i <- chooseInt (0, fromIntegral len - 1)
+  pure (w8, len, i)
+
+shrinkReplicate :: (Word8, Integer, Int) -> [(Word8, Integer, Int)]
+shrinkReplicate (w8, len, i) = do
+  w8' <- shrink w8
+  Positive len' <- shrink (Positive len)
+  i' <- shrink i
+  guard (i' >= 0)
+  guard (i' < fromIntegral len')
+  pure (w8', len', i')
 
 -- Properties
 
