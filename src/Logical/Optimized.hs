@@ -14,7 +14,7 @@ module Logical.Optimized
 where
 
 import Control.Category ((.))
-import Data.Bits ((.&.), (.|.))
+import Data.Bits (Bits ((.&.), (.|.)))
 import Data.Bits qualified as Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -66,6 +66,43 @@ complement bs = unsafeDupablePerformIO . BS.useAsCStringLen bs $ \(srcPtr, len) 
 
 {-# INLINEABLE and #-}
 and :: Bool -> ByteString -> ByteString -> ByteString
+and = binaryHelper (.&.) (.&.)
+
+{-
+and shouldPad bs1 bs2 =
+  let (shorter, longer) = if BS.length bs1 < BS.length bs2 then (bs1, bs2) else (bs2, bs1)
+      (toCopy, toTraverse) = if shouldPad then (longer, shorter) else (shorter, longer)
+   in binaryHelper (.&.) toCopy toTraverse (BS.length shorter)
+
+{-# INLINE binaryHelper #-}
+binaryHelper ::
+  (forall (a :: Type). Bits a => a -> a -> a) ->
+  ByteString ->
+  ByteString ->
+  Int ->
+  ByteString
+binaryHelper f toCopy toTraverse traverseLen =
+  unsafeDupablePerformIO . BS.useAsCStringLen toCopy $ \(copyPtr, copyLen) ->
+    BS.useAsCString toTraverse $ \traversePtr -> do
+      BSI.create copyLen $ \dstPtr -> do
+        copyBytes dstPtr (castPtr copyPtr) copyLen
+        let (bigStrides, littleStrides) = traverseLen `quotRem` 8
+        let offset = bigStrides * 8
+        let bigDstPtr :: Ptr Word64 = castPtr dstPtr
+        let bigTraversePtr :: Ptr Word64 = castPtr traversePtr
+        for_ [0 .. bigStrides - 1] $ \i -> do
+          w64_1 <- peekElemOff bigDstPtr i
+          w64_2 <- peekElemOff bigTraversePtr i
+          pokeElemOff bigDstPtr i $ f w64_1 w64_2
+        let smallDstPtr :: Ptr Word8 = plusPtr dstPtr offset
+        let smallTraversePtr :: Ptr Word8 = plusPtr traversePtr offset
+        for_ [0 .. littleStrides - 1] $ \i -> do
+          w8_1 <- peekElemOff smallDstPtr i
+          w8_2 <- peekElemOff smallTraversePtr i
+          pokeElemOff smallDstPtr i $ f w8_1 w8_2
+-}
+
+{-
 and shouldPad bs1 bs2 =
   let (shorter, longer) = if BS.length bs1 < BS.length bs2 then (bs1, bs2) else (bs2, bs1)
       (toCopy, toTraverse) = if shouldPad then (longer, shorter) else (shorter, longer)
@@ -91,12 +128,20 @@ and shouldPad bs1 bs2 =
               w8_1 <- peekElemOff smallDstPtr i
               w8_2 <- peekElemOff smallTraversePtr i
               pokeElemOff smallDstPtr i $ w8_1 .&. w8_2
+-}
 
 {-# INLINEABLE or #-}
 or :: Bool -> ByteString -> ByteString -> ByteString
+or = binaryHelper (.|.) (.|.)
+
+{-
 or shouldPad bs1 bs2 =
   let (shorter, longer) = if BS.length bs1 < BS.length bs2 then (bs1, bs2) else (bs2, bs1)
       (toCopy, toTraverse) = if shouldPad then (longer, shorter) else (shorter, longer)
+   in binaryHelper (.|.) toCopy toTraverse (BS.length shorter)
+-}
+
+{-
    in go toCopy toTraverse (BS.length shorter)
   where
     go :: ByteString -> ByteString -> Int -> ByteString
@@ -119,12 +164,20 @@ or shouldPad bs1 bs2 =
               w8_1 <- peekElemOff smallDstPtr i
               w8_2 <- peekElemOff smallTraversePtr i
               pokeElemOff smallDstPtr i $ w8_1 .|. w8_2
+-}
 
 {-# INLINEABLE xor #-}
 xor :: Bool -> ByteString -> ByteString -> ByteString
+xor = binaryHelper Bits.xor Bits.xor
+
+{-
 xor shouldPad bs1 bs2 =
   let (shorter, longer) = if BS.length bs1 < BS.length bs2 then (bs1, bs2) else (bs2, bs1)
       (toCopy, toTraverse) = if shouldPad then (longer, shorter) else (shorter, longer)
+   in binaryHelper Bits.xor toCopy toTraverse (BS.length shorter)
+-}
+
+{-
    in go toCopy toTraverse (BS.length shorter)
   where
     go :: ByteString -> ByteString -> Int -> ByteString
@@ -147,6 +200,7 @@ xor shouldPad bs1 bs2 =
               w8_1 <- peekElemOff smallDstPtr i
               w8_2 <- peekElemOff smallTraversePtr i
               pokeElemOff smallDstPtr i $ Bits.xor w8_1 w8_2
+-}
 
 {-# INLINEABLE setBit #-}
 setBit :: ByteString -> Integer -> Bool -> ByteString
@@ -192,3 +246,37 @@ setBits bs changelist = unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr ->
     len = BS.length bs
     bitLen :: Int
     bitLen = len * 8
+
+-- Helpers
+
+-- Loop sectioning helper for binary bitwise ops
+{-# INLINE binaryHelper #-}
+binaryHelper ::
+  (Word64 -> Word64 -> Word64) ->
+  (Word8 -> Word8 -> Word8) ->
+  Bool ->
+  ByteString ->
+  ByteString ->
+  ByteString
+binaryHelper bigCombine smallCombine shouldPad bs1 bs2 =
+  let (shorter, longer) = if BS.length bs1 < BS.length bs2 then (bs1, bs2) else (bs2, bs1)
+      (toCopy, toTraverse) = if shouldPad then (longer, shorter) else (shorter, longer)
+      traverseLen = BS.length shorter
+   in unsafeDupablePerformIO . BS.useAsCStringLen toCopy $ \(copyPtr, copyLen) ->
+        BS.useAsCString toTraverse $ \traversePtr -> do
+          BSI.create copyLen $ \dstPtr -> do
+            copyBytes dstPtr (castPtr copyPtr) copyLen
+            let (bigStrides, littleStrides) = traverseLen `quotRem` 8
+            let offset = bigStrides * 8
+            let bigDstPtr :: Ptr Word64 = castPtr dstPtr
+            let bigTraversePtr :: Ptr Word64 = castPtr traversePtr
+            for_ [0 .. bigStrides - 1] $ \i -> do
+              w64_1 <- peekElemOff bigDstPtr i
+              w64_2 <- peekElemOff bigTraversePtr i
+              pokeElemOff bigDstPtr i $ bigCombine w64_1 w64_2
+            let smallDstPtr :: Ptr Word8 = plusPtr dstPtr offset
+            let smallTraversePtr :: Ptr Word8 = plusPtr traversePtr offset
+            for_ [0 .. littleStrides - 1] $ \i -> do
+              w8_1 <- peekElemOff smallDstPtr i
+              w8_2 <- peekElemOff smallTraversePtr i
+              pokeElemOff smallDstPtr i $ smallCombine w8_1 w8_2
