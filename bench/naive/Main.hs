@@ -1,3 +1,5 @@
+{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Main (main) where
@@ -7,6 +9,7 @@ import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Data.Bits (unsafeShiftL)
 import Data.ByteString (ByteString, cons, replicate, snoc)
+import Data.Foldable (foldl')
 import Data.Function (($))
 import Data.Functor (fmap)
 import Data.Int (Int)
@@ -14,6 +17,8 @@ import Data.Semigroup ((<>))
 import Data.String (String)
 import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Num (Integer, (*), (-))
+import Logical.Naive qualified as Naive
+import Logical.Optimized qualified as Optimized
 import Naive (fromByteString, toByteString)
 import System.IO (IO)
 import Test.Tasty.Bench
@@ -25,6 +30,7 @@ import Test.Tasty.Bench
     nf,
   )
 import Text.Show (show)
+import Prelude (Bool (False, True), fromIntegral)
 
 main :: IO ()
 main =
@@ -54,8 +60,108 @@ main =
             [ bgroup "little endian" . fmap (mkPaddingFBS LittleEndian) $ sizes,
               bgroup "big endian" . fmap (mkPaddingFBS BigEndian) $ sizes
             ]
+        ],
+      bgroup
+        "complement"
+        [ bgroup "naive" . fmap mkComplementNaive $ sizes,
+          bgroup "optimized" . fmap mkComplementOptimized $ sizes
+        ],
+      bgroup
+        "and"
+        [ bgroup "naive (symmetric)" . fmap mkAndSymmetricNaive $ sizes,
+          bgroup "optimized (symmetric)" . fmap mkAndSymmetricOptimized $ sizes
+        ],
+      bgroup
+        "setBit"
+        [ bgroup "naive" . fmap mkSetBitNaive $ sizes,
+          bgroup "optimized" . fmap mkSetBitOptimized $ sizes
+        ],
+      bgroup
+        "setBits"
+        [ bgroup "naive" . fmap mkSetBitsNaive $ [1 .. 32],
+          bgroup "optimized" . fmap mkSetBitsOptimized $ [1 .. 32]
         ]
     ]
+
+mkSetBitsNaive :: Int -> Benchmark
+mkSetBitsNaive toSet =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showToSet . nf (foldl' (\bs (i, b) -> Optimized.setBit bs i b) (replicate 32 0x00)) $ dat
+  where
+    showToSet :: String
+    showToSet = show toSet <> " bits to set"
+    mkData :: [(Integer, Bool)]
+    mkData = fmap (,True) [0 .. fromIntegral (toSet - 1)]
+
+mkSetBitsOptimized :: Int -> Benchmark
+mkSetBitsOptimized toSet =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showToSet . nf (Optimized.setBits (replicate 32 0x00)) $ dat
+  where
+    showToSet :: String
+    showToSet = show toSet <> " bits to set"
+    mkData :: [(Integer, Bool)]
+    mkData = fmap (,True) [0 .. fromIntegral (toSet - 1)]
+
+mkSetBitNaive :: Int -> Benchmark
+mkSetBitNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Naive.setBit dat 0) $ True
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = replicate len 0x00
+
+mkSetBitOptimized :: Int -> Benchmark
+mkSetBitOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Optimized.setBit dat 0) $ True
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = replicate len 0x00
+
+mkAndSymmetricNaive :: Int -> Benchmark
+mkAndSymmetricNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Naive.and False dat) $ dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
+
+mkAndSymmetricOptimized :: Int -> Benchmark
+mkAndSymmetricOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Optimized.and False dat) $ dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
+
+mkComplementNaive :: Int -> Benchmark
+mkComplementNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes $ nf Naive.complement dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
+
+mkComplementOptimized :: Int -> Benchmark
+mkComplementOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes $ nf Optimized.complement dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
 
 mkNoPaddingTBS :: ByteOrder -> Int -> Benchmark
 mkNoPaddingTBS bo bytes =

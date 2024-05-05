@@ -1,44 +1,70 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Main (main) where
 
 import Control.Category ((.))
+import Control.Monad (guard)
 import Data.ByteString
-  ( cons,
+  ( ByteString,
+    cons,
     length,
     replicate,
     reverse,
     singleton,
     uncons,
   )
-import Data.Eq ((==))
-import Data.Function (($))
+import Data.ByteString qualified as BS
 import Data.Functor ((<$>))
 import Data.Int (Int)
 import Data.Maybe (Maybe (Just))
 import Data.Ord (max, (<), (>))
 import Data.Semigroup ((<>))
 import Data.Tuple (fst)
-import Data.Word (Word)
+import Data.Word (Word, Word8)
 import Foreign.Storable (sizeOf)
 import GHC.ByteOrder (ByteOrder (BigEndian, LittleEndian))
 import GHC.Num ((-))
 import GHC.Real (fromIntegral, rem)
 import Helpers (hexByteString)
+import HexByteString (HexByteString (HexByteString))
+import IndexedByteString (toTestData, toTestDataSplit)
+import Laws
+  ( abelianSemigroupLaws,
+    absorbingLaws,
+    idempotenceLaws,
+    involuteLaws,
+    monoidLaws,
+  )
+import Logical.Naive
+  ( and,
+    complement,
+    getBit,
+    or,
+    setBits,
+    xor,
+  )
+import Logical.Naive qualified as LNaive
 import NEByteString qualified as NEBS
 import Naive (fromByteString, toByteString)
 import SuitableInteger (countBytes, toInteger)
 import System.IO (IO)
 import Test.QuickCheck
-  ( NonNegative (NonNegative),
+  ( Gen,
+    NonNegative (NonNegative),
     Positive (Positive),
     Property,
+    arbitrary,
+    chooseInt,
     classify,
     counterexample,
+    forAllShrink,
     property,
-    (.&.),
+    shrink,
+    (.&&.),
     (===),
   )
 import Test.Tasty
@@ -50,6 +76,15 @@ import Test.Tasty
   )
 import Test.Tasty.QuickCheck (QuickCheckTests, testProperty)
 import Text.Show (show)
+import Prelude
+  ( Bool (False, True),
+    Integer,
+    pure,
+    ($),
+    (+),
+    (==),
+    (>=),
+  )
 
 main :: IO ()
 main =
@@ -67,6 +102,64 @@ main =
           fromByteStringProp3,
           fromByteStringProp4,
           fromByteStringProp5
+        ],
+      testGroup
+        "replicate"
+        [ testProperty "replicate 0 b = \"\"" . property $ \(w8 :: Word8) ->
+            LNaive.replicate 0 (fromIntegral w8) === "",
+          testProperty "replicate n b <> replicate m b = replicate (n + m) b" . property $
+            \(NonNegative n, NonNegative m, w8 :: Word8) ->
+              (LNaive.replicate n (fromIntegral w8) <> LNaive.replicate m (fromIntegral w8))
+                === LNaive.replicate (n + m) (fromIntegral w8),
+          testProperty "(replicate n b)[i] = b" . forAllShrink genReplicate shrinkReplicate $ \(w8, n, i) ->
+            BS.index (LNaive.replicate n (fromIntegral w8)) i === w8
+        ],
+      testGroup
+        "complement"
+        [ complementProp,
+          testProperty "De Morgan laws" deMorganLaws
+        ],
+      testGroup
+        "and"
+        [ testGroup "abelian semigroup (truncating)" . abelianSemigroupLaws $ and False,
+          testGroup "idempotent semigroup (truncating)" . idempotenceLaws $ and False,
+          testGroup "absorbing element (truncating)" . absorbingLaws (and False) $ "",
+          testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ and True,
+          testGroup "idempotent semigroup (padding)" . idempotenceLaws $ and True,
+          testGroup "monoid (padding)" . monoidLaws (and True) $ "",
+          testProperty "left distribution over OR (truncation)" . leftDist (and False) $ or False,
+          testProperty "left distribution over XOR (truncation)" . leftDist (and False) $ xor False,
+          testProperty "left distribution over itself (truncation)" . leftDist (and False) $ and False,
+          testGroup "distribution over itself (padding)" . distributiveLaws $ and True
+        ],
+      testGroup
+        "or"
+        [ testGroup "abelian semigroup (truncating)" . abelianSemigroupLaws $ or False,
+          testGroup "idempotent semigroup (truncating)" . idempotenceLaws $ or False,
+          testGroup "absorbing element (truncating)" . absorbingLaws (or False) $ "",
+          testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ or True,
+          testGroup "idempotent semigroup (padding)" . idempotenceLaws $ or True,
+          testGroup "monoid (padding)" . monoidLaws (or True) $ "",
+          testProperty "left distribution over AND (truncation)" . leftDist (or False) $ and False,
+          testProperty "left distribution over itself (truncation)" . leftDist (or False) $ or False,
+          testGroup "distribution over itself (padding)" . distributiveLaws $ or True
+        ],
+      testGroup
+        "xor"
+        [ testGroup "abelian semigroup (truncating)" . abelianSemigroupLaws $ xor False,
+          testGroup "absorbing element (truncating)" . absorbingLaws (xor False) $ "",
+          testGroup "involute (truncating)" . involuteLaws $ xor False,
+          testGroup "abelian semigroup (padding)" . abelianSemigroupLaws $ xor True,
+          testGroup "monoid (padding)" . monoidLaws (xor True) $ "",
+          testGroup "involute (padding)" . involuteLaws $ xor True
+        ],
+      testGroup
+        "get-set"
+        [ testProperty "Get-set" getSetLaw,
+          testProperty "Set-get" setGetLaw,
+          testProperty "Set-set" setSetLaw,
+          testProperty "setBits bs [] = bs" setEmptyLaw,
+          testProperty "setBits (setBits bs is) js = setBits bs (is <> js)" setConcatLaw
         ]
     ]
   where
@@ -77,7 +170,77 @@ main =
     moreTests :: QuickCheckTests -> QuickCheckTests
     moreTests = max 10_000
 
+-- Generators and shrinkers
+
+genReplicate :: Gen (Word8, Integer, Int)
+genReplicate = do
+  w8 <- arbitrary
+  Positive len <- arbitrary
+  i <- chooseInt (0, fromIntegral len - 1)
+  pure (w8, len, i)
+
+shrinkReplicate :: (Word8, Integer, Int) -> [(Word8, Integer, Int)]
+shrinkReplicate (w8, len, i) = do
+  w8' <- shrink w8
+  Positive len' <- shrink (Positive len)
+  i' <- shrink i
+  guard (i' >= 0)
+  guard (i' < fromIntegral len')
+  pure (w8', len', i')
+
 -- Properties
+
+leftDist ::
+  (ByteString -> ByteString -> ByteString) ->
+  (ByteString -> ByteString -> ByteString) ->
+  Property
+leftDist f g = property $ \(HexByteString x, HexByteString y, HexByteString z) ->
+  HexByteString (f x (g y z)) === HexByteString (g (f x y) (f x z))
+
+distributiveLaws ::
+  (ByteString -> ByteString -> ByteString) ->
+  [TestTree]
+distributiveLaws f =
+  [ testProperty "left" . leftDist f $ f,
+    testProperty "right" . property $ \(HexByteString x, HexByteString y, HexByteString z) ->
+      HexByteString (f (f x y) z) === HexByteString (f (f x z) (f y z))
+  ]
+
+deMorganLaws :: Property
+deMorganLaws = property $ \(HexByteString bs1, HexByteString bs2, b) ->
+  (complement (or b bs1 bs2) === and b (complement bs1) (complement bs2))
+    .&&. (complement (and b bs1 bs2) === or b (complement bs1) (complement bs2))
+
+setConcatLaw :: Property
+setConcatLaw = property $ \sbs ->
+  let (bs, is, js) = toTestDataSplit sbs
+   in setBits (setBits bs is) js === setBits bs (is <> js)
+
+setEmptyLaw :: Property
+setEmptyLaw = property $ \(HexByteString bs) ->
+  setBits bs [] === bs
+
+getSetLaw :: Property
+getSetLaw = property $ \ibs ->
+  let (bs, i) = toTestData ibs
+   in setBits bs [(i, getBit bs i)] === bs
+
+setGetLaw :: Property
+setGetLaw = property $ \(ibs, b) ->
+  let (bs, i) = toTestData ibs
+   in getBit (setBits bs [(i, b)]) i === b
+
+setSetLaw :: Property
+setSetLaw = property $ \(ibs, b1, b2) ->
+  let (bs, i) = toTestData ibs
+   in setBits bs [(i, b1), (i, b2)] === setBits bs [(i, b2)]
+
+complementProp :: TestTree
+complementProp = testProperty propName . property $ \(HexByteString bs) ->
+  bs === (complement . complement $ bs)
+  where
+    propName :: TestName
+    propName = "complement . complement = id"
 
 toByteStringProp1 :: TestTree
 toByteStringProp1 = testProperty propName . property $ \i ->
@@ -140,7 +303,7 @@ fromByteStringProp2 = testProperty propName . property $ \w8 ->
       input = singleton w8
       actualBE = fromByteString BigEndian input
       actualLE = fromByteString LittleEndian input
-   in (expected === actualBE) .&. (expected === actualLE)
+   in (expected === actualBE) .&&. (expected === actualLE)
   where
     propName :: TestName
     propName =
@@ -153,7 +316,7 @@ fromByteStringProp3 = testProperty propName . property $ \i ->
   let i' = toInteger i
       actualLE = fromByteString LittleEndian (toByteString 0 LittleEndian i')
       actualBE = fromByteString BigEndian (toByteString 0 BigEndian i')
-   in classifyTBSCodePath (countBytes i') $ (i' === actualLE) .&. (i' === actualBE)
+   in classifyTBSCodePath (countBytes i') $ (i' === actualLE) .&&. (i' === actualBE)
   where
     propName :: TestName
     propName =
@@ -185,7 +348,7 @@ fromByteStringProp5 = testProperty propName . property $ \neBS ->
         . counterexample ("LE number: " <> show leNumber)
         . counterexample ("Actual BE: " <> hexByteString actualBE)
         . counterexample ("Actual LE: " <> hexByteString actualLE)
-        $ (bs === actualLE) .&. (bs == actualBE)
+        $ (bs === actualLE) .&&. (bs == actualBE)
   where
     propName :: TestName
     propName = "toByteString (length bs) bo (fromByteString bo bs) = bs"

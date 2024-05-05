@@ -48,11 +48,16 @@ common bench-lang
 
 library
   import:          lang
-  exposed-modules: Naive
+  exposed-modules:
+    Logical.Naive
+    Logical.Optimized
+    Naive
+
   build-depends:
     , bytestring
     , bytestring-strict-builder
     , bytestring-to-vector
+    , indexed-traversable
     , vector
 
   hs-source-dirs:  src
@@ -61,6 +66,9 @@ library test-utils
   import:          lang
   exposed-modules:
     Helpers
+    HexByteString
+    IndexedByteString
+    Laws
     NEByteString
     SuitableInteger
 
@@ -68,6 +76,8 @@ library test-utils
     , bytestring
     , QuickCheck
     , quickcheck-instances
+    , tasty
+    , tasty-quickcheck
 
   hs-source-dirs:  test-utils
 
@@ -82,6 +92,16 @@ test-suite naive-tests
     , plutus-integer-bytestring
 
   hs-source-dirs: test/naive
+
+test-suite consistency-tests
+  import:         test-lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  build-depends:
+    , bytestring
+    , plutus-integer-bytestring
+
+  hs-source-dirs: test/consistency
 
 -- Benchmarks
 
