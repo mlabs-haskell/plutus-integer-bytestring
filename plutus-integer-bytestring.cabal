@@ -11,7 +11,7 @@ maintainer:         koz@mlabs.city
 bug-reports:        https://github.com/mlabs-haskell/plutus-integer-bytestring
 copyright:          (C) MLabs 2023
 category:           Plutus
-tested-with:        GHC ==9.6.3
+tested-with:        GHC ==8.10.7 || ==9.2.8 || ==9.6.3
 build-type:         Simple
 extra-source-files:
   CHANGELOG.md
