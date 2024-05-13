@@ -34,6 +34,7 @@ common test-lang
   build-depends:
     , QuickCheck
     , tasty
+    , tasty-hunit
     , tasty-quickcheck
     , test-utils
 

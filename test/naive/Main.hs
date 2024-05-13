@@ -74,6 +74,7 @@ import Test.Tasty
     defaultMain,
     testGroup,
   )
+import Test.Tasty.HUnit (assertEqual, testCase)
 import Test.Tasty.QuickCheck (QuickCheckTests, testProperty)
 import Text.Show (show)
 import Prelude
@@ -81,6 +82,7 @@ import Prelude
     Integer,
     pure,
     ($),
+    (*),
     (+),
     (==),
     (>=),
@@ -160,6 +162,14 @@ main =
           testProperty "Set-set" setSetLaw,
           testProperty "setBits bs [] = bs" setEmptyLaw,
           testProperty "setBits (setBits bs is) js = setBits bs (is <> js)" setConcatLaw
+        ],
+      testGroup
+        "popcount"
+        [ testCase "popcount \"\" = 0" . assertEqual "" (LNaive.popcount "") $ 0,
+          testProperty "popcount (x <> y) = popcount x + popcount y" popcountConcatLaw,
+          testProperty "popcount x = bitLen x - popcount (complement x)" popcountComplementLaw,
+          testProperty "popcount (x xor x) = 0" popcountSelfXorLaw,
+          testProperty "inclusion-exclusion" popcountInclusionExclusionLaw
         ]
     ]
   where
@@ -189,6 +199,25 @@ shrinkReplicate (w8, len, i) = do
   pure (w8', len', i')
 
 -- Properties
+
+popcountInclusionExclusionLaw :: Property
+popcountInclusionExclusionLaw = property $ \(HexByteString x, HexByteString y) ->
+  LNaive.popcount (LNaive.xor False x y)
+    === LNaive.popcount (LNaive.or False x y)
+    - LNaive.popcount (LNaive.and False x y)
+
+popcountSelfXorLaw :: Property
+popcountSelfXorLaw = property $ \(HexByteString bs, semantics) ->
+  LNaive.popcount (LNaive.xor semantics bs bs) === 0
+
+popcountComplementLaw :: Property
+popcountComplementLaw = property $ \(HexByteString x) ->
+  let bitLen = BS.length x * 8
+   in LNaive.popcount x === bitLen - LNaive.popcount (LNaive.complement x)
+
+popcountConcatLaw :: Property
+popcountConcatLaw = property $ \(HexByteString x, HexByteString y) ->
+  LNaive.popcount (x <> y) === (LNaive.popcount x + LNaive.popcount y)
 
 leftDist ::
   (ByteString -> ByteString -> ByteString) ->

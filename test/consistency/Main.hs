@@ -31,7 +31,10 @@ main =
       testProperty "or" orIsConsistent,
       testProperty "xor" xorIsConsistent,
       testProperty "setBit" setBitIsConsistent,
-      testProperty "setBits" setBitsIsConsistent
+      testProperty "setBits" setBitsIsConsistent,
+      testProperty "popcount" popcountIsConsistent,
+      testProperty "findFirstSet" findFirstSetIsConsistent,
+      testProperty "findFirstTestSkip" findFirstSetSkipIsConsistent
     ]
   where
     -- By default, QuickCheck (and hence, tasty-quickcheck) runs only 100 tests.
@@ -42,6 +45,18 @@ main =
     moreTests = max 100_000
 
 -- Properties
+
+findFirstSetSkipIsConsistent :: Property
+findFirstSetSkipIsConsistent = property $ \(HexByteString bs) ->
+  Naive.findFirstSet bs === Optimized.findFirstSetSkip bs
+
+findFirstSetIsConsistent :: Property
+findFirstSetIsConsistent = property $ \(HexByteString bs) ->
+  Naive.findFirstSet bs === Optimized.findFirstSet bs
+
+popcountIsConsistent :: Property
+popcountIsConsistent = property $ \(HexByteString bs) ->
+  Naive.popcount bs === Optimized.popcount bs
 
 complementIsConsistent :: Property
 complementIsConsistent = property $ \(HexByteString bs) ->

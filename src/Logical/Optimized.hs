@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -10,6 +11,9 @@ module Logical.Optimized
     xor,
     setBit,
     setBits,
+    popcount,
+    findFirstSet,
+    findFirstSetSkip,
   )
 where
 
@@ -20,7 +24,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BSI
 import Data.Foldable (for_, traverse_)
-import Data.Word (Word64, Word8)
+import Data.Word (Word64, Word8, byteSwap64)
 import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (Ptr, castPtr, plusPtr)
 import Foreign.Storable
@@ -39,11 +43,17 @@ import Prelude
     fromInteger,
     fromIntegral,
     otherwise,
+    pure,
+    quot,
     quotRem,
+    rem,
     ($),
     (*),
+    (+),
     (-),
     (<),
+    (<=),
+    (==),
     (>=),
   )
 
@@ -192,3 +202,89 @@ setBits bs changelist = unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr ->
     len = BS.length bs
     bitLen :: Int
     bitLen = len * 8
+
+{-# INLINEABLE popcount #-}
+popcount :: ByteString -> Int
+popcount bs = unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr -> do
+  let bigSrcPtr :: Ptr Word64 = castPtr srcPtr
+  let smallSrcPtr :: Ptr Word8 = plusPtr srcPtr offset
+  goBig bigSrcPtr smallSrcPtr 0 0
+  where
+    len :: Int
+    !len = BS.length bs
+    bigStrides :: Int
+    !bigStrides = len `quot` 8
+    smallStrides :: Int
+    !smallStrides = len `rem` 8
+    offset :: Int
+    !offset = bigStrides * 8
+    goBig :: Ptr Word64 -> Ptr Word8 -> Int -> Int -> IO Int
+    goBig !bigSrcPtr !smallSrcPtr !acc !bigIx
+      | bigIx == bigStrides = goSmall smallSrcPtr acc 0
+      | otherwise = do
+          !w64 <- peekElemOff bigSrcPtr bigIx
+          goBig bigSrcPtr smallSrcPtr (acc + Bits.popCount w64) (bigIx + 1)
+    goSmall :: Ptr Word8 -> Int -> Int -> IO Int
+    goSmall !smallSrcPtr !acc !smallIx
+      | smallIx == smallStrides = pure acc
+      | otherwise = do
+          !w8 <- peekElemOff smallSrcPtr smallIx
+          goSmall smallSrcPtr (acc + Bits.popCount w8) (smallIx + 1)
+
+{-# INLINEABLE findFirstSet #-}
+findFirstSet :: ByteString -> Int
+findFirstSet bs = unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr -> do
+  let bigSrcPtr :: Ptr Word64 = castPtr srcPtr
+  goBig bigSrcPtr 0 (len - 8)
+  where
+    goBig :: Ptr Word64 -> Int -> Int -> IO Int
+    goBig !bigSrcPtr !acc !byteIx
+      | byteIx >= 0 = do
+          !(w64 :: Word64) <- peekByteOff bigSrcPtr byteIx
+          if w64 == 0x0
+            then goBig bigSrcPtr (acc + 64) (byteIx - 8)
+            else goSmall (castPtr bigSrcPtr) acc (byteIx + 7)
+      | byteIx <= (-8) = pure (-1)
+      | otherwise = goSmall (castPtr bigSrcPtr) 0 (8 + byteIx - 1)
+    goSmall :: Ptr Word8 -> Int -> Int -> IO Int
+    goSmall !smallSrcPtr !acc !byteIx
+      | byteIx < 0 = pure (-1)
+      | otherwise = do
+          !(w8 :: Word8) <- peekByteOff smallSrcPtr byteIx
+          let !counted = Bits.countTrailingZeros w8
+          let !newAcc = acc + counted
+          if counted == 8
+            then goSmall smallSrcPtr newAcc (byteIx - 1)
+            else pure newAcc
+    len :: Int
+    !len = BS.length bs
+
+{-# INLINEABLE findFirstSetSkip #-}
+findFirstSetSkip :: ByteString -> Int
+findFirstSetSkip bs = unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr -> do
+  let bigSrcPtr :: Ptr Word64 = castPtr srcPtr
+  goBig bigSrcPtr 0 (len - 8)
+  where
+    goBig :: Ptr Word64 -> Int -> Int -> IO Int
+    goBig !bigSrcPtr !acc !byteIx
+      | byteIx >= 0 = do
+          !(w64 :: Word64) <- peekByteOff bigSrcPtr byteIx
+          if w64 == 0x0
+            then goBig bigSrcPtr (acc + 64) (byteIx - 8)
+            else do
+              let !counted = Bits.countTrailingZeros . byteSwap64 $ w64
+              pure $ acc + counted
+      | byteIx <= (-8) = pure (-1)
+      | otherwise = goSmall (castPtr bigSrcPtr) 0 (8 + byteIx - 1)
+    goSmall :: Ptr Word8 -> Int -> Int -> IO Int
+    goSmall !smallSrcPtr !acc !byteIx
+      | byteIx < 0 = pure (-1)
+      | otherwise = do
+          !(w8 :: Word8) <- peekByteOff smallSrcPtr byteIx
+          let !counted = Bits.countTrailingZeros w8
+          let !newAcc = acc + counted
+          if counted == 8
+            then goSmall smallSrcPtr newAcc (byteIx - 1)
+            else pure newAcc
+    len :: Int
+    !len = BS.length bs

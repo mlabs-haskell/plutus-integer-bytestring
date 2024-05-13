@@ -80,8 +80,80 @@ main =
         "setBits"
         [ bgroup "naive" . fmap mkSetBitsNaive $ [1 .. 32],
           bgroup "optimized" . fmap mkSetBitsOptimized $ [1 .. 32]
+        ],
+      bgroup
+        "popcount"
+        [ bgroup "naive" . fmap popcountNaive $ sizes,
+          bgroup "optimized" . fmap popcountOptimized $ sizes
+        ],
+      bgroup
+        "findFirstSet"
+        [ bgroup "naive (homogenous)" . fmap findFirstSetNaive $ sizes,
+          bgroup "optimized (homogenous)" . fmap findFirstSetOptimized $ sizes,
+          bgroup "no skip (last block)" . fmap findFirstSetNoSkip $ sizes,
+          bgroup "with skip (last block)" . fmap findFirstSetWithSkip $ sizes
         ]
     ]
+
+findFirstSetNoSkip :: Int -> Benchmark
+findFirstSetNoSkip len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf Optimized.findFirstSet $ dat
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = cons 0x1 . replicate (len - 1) $ 0x00
+
+findFirstSetWithSkip :: Int -> Benchmark
+findFirstSetWithSkip len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf Optimized.findFirstSetSkip $ dat
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = cons 0x1 . replicate (len - 1) $ 0x00
+
+findFirstSetNaive :: Int -> Benchmark
+findFirstSetNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf Naive.findFirstSet $ dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
+
+findFirstSetOptimized :: Int -> Benchmark
+findFirstSetOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf Optimized.findFirstSet $ dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
+
+popcountNaive :: Int -> Benchmark
+popcountNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf Naive.popcount $ dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
+
+popcountOptimized :: Int -> Benchmark
+popcountOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf Optimized.popcount $ dat
+  where
+    showBytes :: String
+    showBytes = show (len - 1) <> " bytes"
+    mkData :: ByteString
+    mkData = replicate (len - 1) 0x00
 
 mkSetBitsNaive :: Int -> Benchmark
 mkSetBitsNaive toSet =

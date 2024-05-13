@@ -1,4 +1,5 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -11,6 +12,8 @@ module Logical.Naive
     getBit,
     setBit,
     setBits,
+    popcount,
+    findFirstSet,
   )
 where
 
@@ -24,15 +27,18 @@ import Data.Functor.WithIndex (imap)
 import GHC.Exts qualified as GHC
 import Prelude
   ( Bool,
+    Int,
     Integer,
     error,
     fromInteger,
+    fromIntegral,
     min,
     not,
     otherwise,
     quotRem,
     ($),
     (*),
+    (+),
     (-),
     (/=),
     (<),
@@ -124,3 +130,27 @@ setBit bs ix b =
 
 setBits :: ByteString -> [(Integer, Bool)] -> ByteString
 setBits = foldl' (\bs (i, b) -> setBit bs i b)
+
+popcount :: ByteString -> Int
+popcount bs = foldl' go 0 [0 .. bitLen - 1]
+  where
+    bitLen :: Int
+    bitLen = BS.length bs * 8
+    go :: Int -> Int -> Int
+    go acc ix =
+      if getBit bs (fromIntegral ix)
+        then acc + 1
+        else acc
+
+findFirstSet :: ByteString -> Int
+findFirstSet bs = go [0 .. bitLen - 1]
+  where
+    bitLen :: Int
+    bitLen = BS.length bs * 8
+    go :: [Int] -> Int
+    go = \case
+      [] -> (-1)
+      (ix : ixes) ->
+        if getBit bs (fromIntegral ix)
+          then ix
+          else go ixes
