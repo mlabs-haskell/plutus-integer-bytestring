@@ -14,6 +14,8 @@ module Logical.Naive
     setBits,
     popcount,
     findFirstSet,
+    rotate,
+    shift,
   )
 where
 
@@ -24,18 +26,25 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Foldable (foldl')
 import Data.Functor.WithIndex (imap)
+import Data.Maybe (mapMaybe)
 import GHC.Exts qualified as GHC
 import Prelude
-  ( Bool,
+  ( Bool (True),
     Int,
     Integer,
+    Maybe (Nothing),
+    abs,
     error,
     fromInteger,
     fromIntegral,
     min,
+    mod,
     not,
     otherwise,
+    pure,
     quotRem,
+    rem,
+    signum,
     ($),
     (*),
     (+),
@@ -154,3 +163,43 @@ findFirstSet bs = go [0 .. bitLen - 1]
         if getBit bs (fromIntegral ix)
           then ix
           else go ixes
+
+shift :: ByteString -> Int -> ByteString
+shift bs bitMove =
+  let start = replicate (fromIntegral len) 0x0
+   in if abs bitMove >= bitLen
+        then start
+        else
+          let changelist = case signum bitMove of
+                0 -> []
+                (-1) -> mapMaybe (go bitMove) [abs bitMove .. bitLen - 1]
+                _ -> mapMaybe (go bitMove) [0 .. bitLen - bitMove]
+           in setBits start changelist
+  where
+    len :: Int
+    len = BS.length bs
+    bitLen :: Int
+    bitLen = len * 8
+    go :: Int -> Int -> Maybe (Integer, Bool)
+    go move oldIx =
+      if getBit bs . fromIntegral $ oldIx
+        then pure (fromIntegral $ oldIx + move, True)
+        else Nothing
+
+rotate :: ByteString -> Int -> ByteString
+rotate bs bitMove = case bitMove `mod` bitLen of
+  0 -> bs
+  reducedMove ->
+    let start = replicate (fromIntegral len) 0x0
+        changelist = mapMaybe (go reducedMove) [0 .. bitLen - 1]
+     in setBits start changelist
+  where
+    len :: Int
+    len = BS.length bs
+    bitLen :: Int
+    bitLen = len * 8
+    go :: Int -> Int -> Maybe (Integer, Bool)
+    go move oldIx =
+      if getBit bs . fromIntegral $ oldIx
+        then pure (fromIntegral ((oldIx + bitLen + move) `rem` bitLen), True)
+        else Nothing
