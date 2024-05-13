@@ -61,6 +61,7 @@ import Test.QuickCheck
     chooseInt,
     classify,
     counterexample,
+    discard,
     forAllShrink,
     property,
     shrink,
@@ -80,6 +81,8 @@ import Text.Show (show)
 import Prelude
   ( Bool (False, True),
     Integer,
+    any,
+    not,
     pure,
     ($),
     (*),
@@ -170,6 +173,12 @@ main =
           testProperty "popcount x = bitLen x - popcount (complement x)" popcountComplementLaw,
           testProperty "popcount (x xor x) = 0" popcountSelfXorLaw,
           testProperty "inclusion-exclusion" popcountInclusionExclusionLaw
+        ],
+      testGroup
+        "findFirstSet"
+        [ testProperty "found index bit is set" ffsIsSetLaw,
+          testProperty "lower-index bits are clear" ffsIsClearLaw,
+          testProperty "findFirstSet (x xor x) = -1" ffsXorLaw
         ]
     ]
   where
@@ -199,6 +208,25 @@ shrinkReplicate (w8, len, i) = do
   pure (w8', len', i')
 
 -- Properties
+
+ffsXorLaw :: Property
+ffsXorLaw = property $ \(HexByteString bs, semantics) ->
+  LNaive.findFirstSet (LNaive.xor semantics bs bs) === (-1)
+
+ffsIsClearLaw :: Property
+ffsIsClearLaw = property $ \(HexByteString bs) ->
+  let ixesToCheck = case LNaive.findFirstSet bs of
+        (-1) -> [0 .. BS.length bs * 8 - 1]
+        i -> [0 .. i - 1]
+   in not . any (LNaive.getBit bs . fromIntegral) $ ixesToCheck
+
+ffsIsSetLaw :: Property
+ffsIsSetLaw = property $ \(HexByteString bs) ->
+  let bs' = BS.cons 0x1 bs
+   in counterexample (show . HexByteString $ bs') $
+        case LNaive.findFirstSet bs' of
+          (-1) -> discard
+          i -> LNaive.getBit bs' . fromIntegral $ i
 
 popcountInclusionExclusionLaw :: Property
 popcountInclusionExclusionLaw = property $ \(HexByteString x, HexByteString y) ->
