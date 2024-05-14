@@ -52,6 +52,7 @@ import Prelude
     (/=),
     (<),
     (<>),
+    (==),
     (>),
     (>=),
   )
@@ -167,15 +168,15 @@ findFirstSet bs = go [0 .. bitLen - 1]
 shift :: ByteString -> Int -> ByteString
 shift bs bitMove
   | BS.null bs = bs
+  | bitMove == 0 = bs
   | otherwise =
       let start = replicate (fromIntegral len) 0x0
        in if abs bitMove >= bitLen
             then start
             else
               let changelist = case signum bitMove of
-                    0 -> []
                     (-1) -> mapMaybe (go bitMove) [abs bitMove .. bitLen - 1]
-                    _ -> mapMaybe (go bitMove) [0 .. bitLen - bitMove]
+                    _ -> mapMaybe (go bitMove) [0 .. bitLen - bitMove - 1]
                in setBits start changelist
   where
     len :: Int

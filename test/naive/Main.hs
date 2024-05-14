@@ -1,7 +1,11 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Main (main) where
@@ -18,8 +22,10 @@ import Data.ByteString
     uncons,
   )
 import Data.ByteString qualified as BS
+import Data.Coerce (Coercible, coerce)
 import Data.Functor ((<$>))
 import Data.Int (Int)
+import Data.Kind (Type)
 import Data.Maybe (Maybe (Just))
 import Data.Ord (max, (<), (>))
 import Data.Semigroup ((<>))
@@ -53,8 +59,11 @@ import Naive (fromByteString, toByteString)
 import SuitableInteger (countBytes, toInteger)
 import System.IO (IO)
 import Test.QuickCheck
-  ( Gen,
+  ( Arbitrary,
+    Gen,
+    Negative (Negative),
     NonNegative (NonNegative),
+    NonPositive (NonPositive),
     Positive (Positive),
     Property,
     arbitrary,
@@ -81,7 +90,9 @@ import Text.Show (show)
 import Prelude
   ( Bool (False, True),
     Integer,
+    Show,
     any,
+    min,
     mod,
     not,
     pure,
@@ -168,6 +179,14 @@ main =
           testProperty "setBits (setBits bs is) js = setBits bs (is <> js)" setConcatLaw
         ],
       testGroup
+        "shift"
+        [ testProperty "shift bs 0 = bs" shiftZeroLaw,
+          testProperty "shift bs (i + j) = shift (shift bs i) j, non-negative" $ shiftSumLaw @NonNegative,
+          testProperty "shift bs (i + j) = shift (shift bs i) j, non-positive" $ shiftSumLaw @NonPositive,
+          testProperty "positive shifts erase low-index bits" shiftPositiveLaw,
+          testProperty "negative shifts erase high-index bits" shiftNegativeLaw
+        ],
+      testGroup
         "rotate"
         [ testProperty "rotate bs 0 = bs" rotateZeroLaw,
           testProperty "rotate bs (i + j) = rotate (rotate bs i) j" rotateAddLaw,
@@ -217,6 +236,35 @@ shrinkReplicate (w8, len, i) = do
   pure (w8', len', i')
 
 -- Properties
+
+shiftPositiveLaw :: Property
+shiftPositiveLaw = property $ \(HexByteString bs, Positive i) ->
+  let bitLen = BS.length bs * 8
+      ixes = [0 .. min (i - 1) (bitLen - 1)]
+   in not . any (getBit (LNaive.shift bs i) . fromIntegral) $ ixes
+
+shiftNegativeLaw :: Property
+shiftNegativeLaw = property $ \(HexByteString bs, Negative i) ->
+  let bitLen = BS.length bs * 8
+      ixes = [max 0 (bitLen + i) .. bitLen - 1]
+   in not . any (getBit (LNaive.shift bs i) . fromIntegral) $ ixes
+
+shiftSumLaw ::
+  forall (f :: Type -> Type).
+  ( Coercible (f Int) Int,
+    Arbitrary (f Int),
+    Show (f Int)
+  ) =>
+  Property
+shiftSumLaw = property $ \(HexByteString bs, i, j) ->
+  let i' = coerce @(f Int) @Int i
+      j' = coerce @(f Int) @Int j
+   in HexByteString (LNaive.shift bs (i' + j'))
+        === HexByteString (LNaive.shift (LNaive.shift bs i') j')
+
+shiftZeroLaw :: Property
+shiftZeroLaw = property $ \hbs@(HexByteString bs) ->
+  HexByteString (LNaive.shift bs 0) === hbs
 
 rotateGetLaw :: Property
 rotateGetLaw = property $ \(ibs, j) ->
