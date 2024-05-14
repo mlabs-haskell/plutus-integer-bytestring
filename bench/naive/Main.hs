@@ -92,8 +92,33 @@ main =
           bgroup "optimized (homogenous)" . fmap findFirstSetOptimized $ sizes,
           bgroup "no skip (last block)" . fmap findFirstSetNoSkip $ sizes,
           bgroup "with skip (last block)" . fmap findFirstSetWithSkip $ sizes
+        ],
+      bgroup
+        "shift"
+        [ bgroup "naive" . fmap mkShiftNaive $ sizes,
+          bgroup "optimized" . fmap mkShiftOptimized $ sizes
         ]
     ]
+
+mkShiftNaive :: Int -> Benchmark
+mkShiftNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Naive.shift dat) $ 8 * len - 1
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = replicate len 0xFF
+
+mkShiftOptimized :: Int -> Benchmark
+mkShiftOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Optimized.shift dat) $ 8 * len - 1
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = replicate len 0xFF
 
 findFirstSetNoSkip :: Int -> Benchmark
 findFirstSetNoSkip len =

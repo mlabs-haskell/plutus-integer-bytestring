@@ -14,10 +14,12 @@ module Logical.Optimized
     popcount,
     findFirstSet,
     findFirstSetSkip,
+    shift,
   )
 where
 
 import Control.Category ((.))
+import Control.Monad (unless, when)
 import Data.Bits ((.&.), (.|.))
 import Data.Bits qualified as Bits
 import Data.ByteString (ByteString)
@@ -25,7 +27,7 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Internal qualified as BSI
 import Data.Foldable (for_, traverse_)
 import Data.Word (Word64, Word8, byteSwap64)
-import Foreign.Marshal.Utils (copyBytes)
+import Foreign.Marshal.Utils (copyBytes, fillBytes)
 import Foreign.Ptr (Ptr, castPtr, plusPtr)
 import Foreign.Storable
   ( peekByteOff,
@@ -39,6 +41,7 @@ import Prelude
     IO,
     Int,
     Integer,
+    abs,
     error,
     fromInteger,
     fromIntegral,
@@ -47,6 +50,7 @@ import Prelude
     quot,
     quotRem,
     rem,
+    signum,
     ($),
     (*),
     (+),
@@ -54,6 +58,7 @@ import Prelude
     (<),
     (<=),
     (==),
+    (>),
     (>=),
   )
 
@@ -288,3 +293,55 @@ findFirstSetSkip bs = unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr -> d
             else pure newAcc
     len :: Int
     !len = BS.length bs
+
+{-# INLINEABLE shift #-}
+shift :: ByteString -> Int -> ByteString
+shift bs bitMove
+  | BS.null bs = bs
+  | bitMove == 0 = bs
+  | otherwise = unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr ->
+      BSI.create len $ \dstPtr -> do
+        let magnitude = abs bitMove
+        fillBytes dstPtr 0x00 len
+        unless (magnitude >= bitLen) $ do
+          let (bigShift, smallShift) = magnitude `quotRem` 8
+          case signum bitMove of
+            (-1) -> negativeShift (castPtr srcPtr) dstPtr bigShift smallShift
+            _ -> positiveShift (castPtr srcPtr) dstPtr bigShift smallShift
+  where
+    len :: Int
+    !len = BS.length bs
+    bitLen :: Int
+    !bitLen = len * 8
+    negativeShift :: Ptr Word8 -> Ptr Word8 -> Int -> Int -> IO ()
+    negativeShift srcPtr dstPtr bigShift smallShift = do
+      let copyDstPtr = plusPtr dstPtr bigShift
+      let copyLen = len - bigShift
+      copyBytes copyDstPtr srcPtr copyLen
+      when (smallShift > 0) $ do
+        let !invSmallShift = 8 - smallShift
+        let !mask = 0xFF `Bits.unsafeShiftR` invSmallShift
+        for_ [len - 1, len - 2 .. len - copyLen] $ \byteIx -> do
+          !(currentByte :: Word8) <- peekByteOff dstPtr byteIx
+          !(prevByte :: Word8) <- peekByteOff dstPtr (byteIx - 1)
+          let !prevOverflowBits = prevByte .&. mask
+          let !newCurrentByte = (currentByte `Bits.unsafeShiftR` smallShift) .|. (prevOverflowBits `Bits.unsafeShiftL` invSmallShift)
+          pokeByteOff dstPtr byteIx newCurrentByte
+        !(firstByte :: Word8) <- peekByteOff dstPtr (len - copyLen - 1)
+        pokeByteOff dstPtr (len - copyLen - 1) (firstByte `Bits.unsafeShiftR` smallShift)
+    positiveShift :: Ptr Word8 -> Ptr Word8 -> Int -> Int -> IO ()
+    positiveShift srcPtr dstPtr bigShift smallShift = do
+      let copySrcPtr = plusPtr srcPtr bigShift
+      let copyLen = len - bigShift
+      copyBytes dstPtr copySrcPtr copyLen
+      when (smallShift > 0) $ do
+        let !invSmallShift = 8 - smallShift
+        let !mask = 0xFF `Bits.unsafeShiftL` invSmallShift
+        for_ [0, 1 .. copyLen - 2] $ \byteIx -> do
+          !(currentByte :: Word8) <- peekByteOff dstPtr byteIx
+          !(nextByte :: Word8) <- peekByteOff dstPtr (byteIx + 1)
+          let !nextOverflowBits = nextByte .&. mask
+          let !newCurrentByte = (currentByte `Bits.unsafeShiftL` smallShift) .|. (nextOverflowBits `Bits.unsafeShiftR` invSmallShift)
+          pokeByteOff dstPtr byteIx newCurrentByte
+        !(lastByte :: Word8) <- peekByteOff dstPtr (copyLen - 1)
+        pokeByteOff dstPtr (copyLen - 1) (lastByte `Bits.unsafeShiftL` smallShift)
