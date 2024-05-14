@@ -82,6 +82,7 @@ import Prelude
   ( Bool (False, True),
     Integer,
     any,
+    mod,
     not,
     pure,
     ($),
@@ -167,6 +168,14 @@ main =
           testProperty "setBits (setBits bs is) js = setBits bs (is <> js)" setConcatLaw
         ],
       testGroup
+        "rotate"
+        [ testProperty "rotate bs 0 = bs" rotateZeroLaw,
+          testProperty "rotate bs (i + j) = rotate (rotate bs i) j" rotateAddLaw,
+          testProperty "rotate bs i = rotate bs (i `mod` bitLen bs)" rotateModLaw,
+          testProperty "popcount bs = popcount (rotate bs i)" rotatePopcountLaw,
+          testProperty "getBit bs i = getBit (rotate bs j) (i + j `mod` bitLen bs)" rotateGetLaw
+        ],
+      testGroup
         "popcount"
         [ testCase "popcount \"\" = 0" . assertEqual "" (LNaive.popcount "") $ 0,
           testProperty "popcount (x <> y) = popcount x + popcount y" popcountConcatLaw,
@@ -208,6 +217,34 @@ shrinkReplicate (w8, len, i) = do
   pure (w8', len', i')
 
 -- Properties
+
+rotateGetLaw :: Property
+rotateGetLaw = property $ \(ibs, j) ->
+  let (bs, i) = toTestData ibs
+      bitLen = BS.length bs * 8
+   in LNaive.getBit bs i
+        === LNaive.getBit
+          (LNaive.rotate bs . fromIntegral $ j)
+          ((i + j) `mod` fromIntegral bitLen)
+
+rotateModLaw :: Property
+rotateModLaw = property $ \(HexByteString bs, i) ->
+  let bitLen = BS.length bs * 8
+   in HexByteString (LNaive.rotate bs i)
+        === HexByteString (LNaive.rotate bs $ i `mod` bitLen)
+
+rotateZeroLaw :: Property
+rotateZeroLaw = property $ \hbs@(HexByteString bs) ->
+  HexByteString (LNaive.rotate bs 0) === hbs
+
+rotateAddLaw :: Property
+rotateAddLaw = property $ \(HexByteString bs, i, j) ->
+  HexByteString (LNaive.rotate bs (i + j))
+    === HexByteString (LNaive.rotate (LNaive.rotate bs i) j)
+
+rotatePopcountLaw :: Property
+rotatePopcountLaw = property $ \(HexByteString bs, i) ->
+  LNaive.popcount bs === LNaive.popcount (LNaive.rotate bs i)
 
 ffsXorLaw :: Property
 ffsXorLaw = property $ \(HexByteString bs, semantics) ->
