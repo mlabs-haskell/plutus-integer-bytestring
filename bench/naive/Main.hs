@@ -97,8 +97,33 @@ main =
         "shift"
         [ bgroup "naive" . fmap mkShiftNaive $ sizes,
           bgroup "optimized" . fmap mkShiftOptimized $ sizes
+        ],
+      bgroup
+        "rotate"
+        [ bgroup "naive" . fmap mkRotateNaive $ sizes,
+          bgroup "optimized" . fmap mkRotateOptimized $ sizes
         ]
     ]
+
+mkRotateNaive :: Int -> Benchmark
+mkRotateNaive len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Naive.rotate dat) $ 8 * len - 1
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = replicate len 0xFF
+
+mkRotateOptimized :: Int -> Benchmark
+mkRotateOptimized len =
+  env (evaluate . force $ mkData) $ \dat ->
+    bench showBytes . nf (Optimized.rotate dat) $ 8 * len - 1
+  where
+    showBytes :: String
+    showBytes = show len <> " bytes"
+    mkData :: ByteString
+    mkData = replicate len 0xFF
 
 mkShiftNaive :: Int -> Benchmark
 mkShiftNaive len =

@@ -15,6 +15,7 @@ module Logical.Optimized
     findFirstSet,
     findFirstSetSkip,
     shift,
+    rotate,
   )
 where
 
@@ -325,7 +326,9 @@ shift bs bitMove
           !(currentByte :: Word8) <- peekByteOff dstPtr byteIx
           !(prevByte :: Word8) <- peekByteOff dstPtr (byteIx - 1)
           let !prevOverflowBits = prevByte .&. mask
-          let !newCurrentByte = (currentByte `Bits.unsafeShiftR` smallShift) .|. (prevOverflowBits `Bits.unsafeShiftL` invSmallShift)
+          let !newCurrentByte =
+                (currentByte `Bits.unsafeShiftR` smallShift)
+                  .|. (prevOverflowBits `Bits.unsafeShiftL` invSmallShift)
           pokeByteOff dstPtr byteIx newCurrentByte
         !(firstByte :: Word8) <- peekByteOff dstPtr (len - copyLen - 1)
         pokeByteOff dstPtr (len - copyLen - 1) (firstByte `Bits.unsafeShiftR` smallShift)
@@ -341,7 +344,80 @@ shift bs bitMove
           !(currentByte :: Word8) <- peekByteOff dstPtr byteIx
           !(nextByte :: Word8) <- peekByteOff dstPtr (byteIx + 1)
           let !nextOverflowBits = nextByte .&. mask
-          let !newCurrentByte = (currentByte `Bits.unsafeShiftL` smallShift) .|. (nextOverflowBits `Bits.unsafeShiftR` invSmallShift)
+          let !newCurrentByte =
+                (currentByte `Bits.unsafeShiftL` smallShift)
+                  .|. (nextOverflowBits `Bits.unsafeShiftR` invSmallShift)
           pokeByteOff dstPtr byteIx newCurrentByte
         !(lastByte :: Word8) <- peekByteOff dstPtr (copyLen - 1)
         pokeByteOff dstPtr (copyLen - 1) (lastByte `Bits.unsafeShiftL` smallShift)
+
+{-# INLINEABLE rotate #-}
+rotate :: ByteString -> Int -> ByteString
+rotate bs bitMove
+  | BS.null bs = bs
+  | otherwise =
+      let !magnitude = abs bitMove
+          !reducedMagnitude = magnitude `rem` bitLen
+       in if reducedMagnitude == 0
+            then bs
+            else unsafeDupablePerformIO . BS.useAsCString bs $ \srcPtr ->
+              BSI.create len $ \dstPtr -> do
+                let (bigRotation, smallRotation) = reducedMagnitude `quotRem` 8
+                case signum bitMove of
+                  (-1) -> negativeRotate (castPtr srcPtr) dstPtr bigRotation smallRotation
+                  _ -> positiveRotate (castPtr srcPtr) dstPtr bigRotation smallRotation
+  where
+    len :: Int
+    !len = BS.length bs
+    bitLen :: Int
+    !bitLen = len * 8
+    negativeRotate :: Ptr Word8 -> Ptr Word8 -> Int -> Int -> IO ()
+    negativeRotate srcPtr dstPtr bigRotate smallRotate = do
+      let copyStartDstPtr = plusPtr dstPtr bigRotate
+      let copyStartLen = len - bigRotate
+      copyBytes copyStartDstPtr srcPtr copyStartLen
+      let copyEndSrcPtr = plusPtr srcPtr copyStartLen
+      copyBytes dstPtr copyEndSrcPtr bigRotate
+      when (smallRotate > 0) $ do
+        let invSmallRotate = 8 - smallRotate
+        let !mask = 0xFF `Bits.unsafeShiftR` invSmallRotate
+        !(cloneLastByte :: Word8) <- peekByteOff dstPtr (len - 1)
+        for_ [len - 1, len - 2 .. 1] $ \byteIx -> do
+          !(currentByte :: Word8) <- peekByteOff dstPtr byteIx
+          !(prevByte :: Word8) <- peekByteOff dstPtr (byteIx - 1)
+          let !prevOverflowBits = prevByte .&. mask
+          let !newCurrentByte =
+                (currentByte `Bits.unsafeShiftR` smallRotate)
+                  .|. (prevOverflowBits `Bits.unsafeShiftL` invSmallRotate)
+          pokeByteOff dstPtr byteIx newCurrentByte
+        !(firstByte :: Word8) <- peekByteOff dstPtr 0
+        let !lastByteOverflow = cloneLastByte .&. mask
+        let !newLastByte =
+              (firstByte `Bits.unsafeShiftR` smallRotate)
+                .|. (lastByteOverflow `Bits.unsafeShiftL` invSmallRotate)
+        pokeByteOff dstPtr 0 newLastByte
+    positiveRotate :: Ptr Word8 -> Ptr Word8 -> Int -> Int -> IO ()
+    positiveRotate srcPtr dstPtr bigRotate smallRotate = do
+      let copyStartSrcPtr = plusPtr srcPtr bigRotate
+      let copyStartLen = len - bigRotate
+      copyBytes dstPtr copyStartSrcPtr copyStartLen
+      let copyEndDstPtr = plusPtr dstPtr copyStartLen
+      copyBytes copyEndDstPtr srcPtr bigRotate
+      when (smallRotate > 0) $ do
+        let !invSmallRotate = 8 - smallRotate
+        let !mask = 0xFF `Bits.unsafeShiftL` invSmallRotate
+        !(cloneFirstByte :: Word8) <- peekByteOff dstPtr 0
+        for_ [0, 1 .. len - 2] $ \byteIx -> do
+          !(currentByte :: Word8) <- peekByteOff dstPtr byteIx
+          !(nextByte :: Word8) <- peekByteOff dstPtr (byteIx + 1)
+          let !nextOverflowBits = nextByte .&. mask
+          let !newCurrentByte =
+                (currentByte `Bits.unsafeShiftL` smallRotate)
+                  .|. (nextOverflowBits `Bits.unsafeShiftR` invSmallRotate)
+          pokeByteOff dstPtr byteIx newCurrentByte
+        !(lastByte :: Word8) <- peekByteOff dstPtr (len - 1)
+        let !firstOverflowBits = cloneFirstByte .&. mask
+        let !newLastByte =
+              (lastByte `Bits.unsafeShiftL` smallRotate)
+                .|. (firstOverflowBits `Bits.unsafeShiftR` invSmallRotate)
+        pokeByteOff dstPtr (len - 1) newLastByte
